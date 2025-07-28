@@ -39,7 +39,8 @@ set_cases <- function(df,
                       year_beta = 1.2,
                       RR = 2,
                       RR_lag = 1.0,
-                      RR_double = 2.5) {
+                      RR_nvis = 1.02,
+                      RR_lag_nvis = 1.05) {
   
   # ******
   # df <- chicagoNMMAPS  
@@ -84,7 +85,8 @@ set_cases <- function(df,
   
   df$RR <- RR
   df$RR_lag <- RR_lag
-  df$RR_double <- RR_double
+  df$RR_nvis <- RR_nvis
+  df$RR_lag_nvis <- RR_lag_nvis
   
   # ggplot(df) +
   #   geom_point(aes(x = date, y = death))
@@ -101,7 +103,8 @@ x1 <- set_cases(chicagoNMMAPS,
                 year_beta = ybeta_1, 
                 RR = RR_1, 
                 RR_lag = RR_1_lag,
-                RR_double = RR_1_double)
+                RR_nvis = RR_1_nvis,
+                RR_lag_nvis = RR_1_lag_nvis)
 
 x2 <- set_cases(chicagoNMMAPS, 
                 baseline = bl,
@@ -109,7 +112,8 @@ x2 <- set_cases(chicagoNMMAPS,
                 year_beta = ybeta_2, 
                 RR = RR_2, 
                 RR_lag = RR_2_lag,
-                RR_double = RR_2_double)
+                RR_nvis = RR_2_nvis,
+                RR_lag_nvis = RR_2_lag_nvis)
 
 x1$county <- 'CountyA'
 x2$county <- 'CountyB'
@@ -196,20 +200,26 @@ head(df_w_exp)
 # create the weekly dataset
 df_weekly <- df_w_exp %>%
   mutate(is_flood_day_int = 1*(!is.na(is_flood_day))) %>%
-  group_by(county, week_num, RR, RR_lag, RR_double) %>%
+  group_by(county, week_num, RR, RR_lag, RR_nvis, RR_lag_nvis) %>%
   summarize(
     .groups = 'keep',
     # hmm not all weeks have every day
     n_days_in_this_week = n(),
     # 
     week_start = min(date),
-    # exposure variable that we will later turn into crossbasis
+    # mark flood events as one
     is_flood_week = (sum(is_flood_day_int) > 0) * 1,
     # cases
     case_baseline = sum(death),
     # example of other covariates
     avg_tmp = mean(temp, na.rm = T)
   )
+
+# we want to also add a variable for the n-vis in recent weeks (up to 4)
+df_weekly$n_recent_floods <- NA
+for(i in 5:nrow(df_weekly)) {
+  df_weekly$n_recent_floods[i] <- sum(df_weekly$is_flood_week[(i-4):i])
+}
 
 # remove any week that doesn't have 7 days
 df_weekly <- df_weekly %>% filter(n_days_in_this_week == 7)
@@ -226,12 +236,16 @@ df_weekly$year <- year(df_weekly$week_start)
 
 # plot
 # ggplot(df_weekly) + 
-#   geom_point(aes(x = week_start, y = case_baseline)) +
+#   geom_point(aes(x = week_start, y = case_baseline, col = n_recent_floods)) +
 #   facet_wrap(~county)
 
-# now add the case spikes for RR and RR_lag
-# HOW TO HANDLE DOUBLY EXPOSED DURING OVERLAPS? 
-# ** ASSUME INDEPENDANT **
+# now add the case spikes for RR, RR_lag, and accounting for RR_nvis
+# ASSUMPTIONS:
+#         the greatest impacts of flooding will be during and soon after the
+#                 flood week
+#         more events in recent weeks will lead to greater impacts
+#         health impacts will decay over the course of lag time
+# 
 df_weekly_l <- split(df_weekly, f = df_weekly$county)
 N_COUNTIES <- length(df_weekly_l)
 for(county_i in 1:N_COUNTIES) {
@@ -242,20 +256,21 @@ for(county_i in 1:N_COUNTIES) {
   # Set n cases to baseline
   this_df_w_l$n_cases <- this_df_w_l$case_baseline
   
-  # add lags
+  # add lags (for is_flood)
   this_df_w_l$lag1 <- lag(this_df_w_l$is_flood_week, n = 1)
   this_df_w_l$lag2 <- lag(this_df_w_l$is_flood_week, n = 2)
   this_df_w_l$lag3 <- lag(this_df_w_l$is_flood_week, n = 3)
   this_df_w_l$lag4 <- lag(this_df_w_l$is_flood_week, n = 4)
   
-  # Add marker to represent "double_flood"
-  #
-  this_df_w_l$double_flood <- ifelse(this_df_w_l$is_flood_week == 1 & 
-                                       rowSums(this_df_w_l[names(this_df_w_l)[grepl("^lag", names(this_df_w_l))]]) >= 1, 1, 0)
-  
+  # add lags (for n_vis)
+  this_df_w_l$lag_nvis_1 <- lag(this_df_w_l$n_recent_floods, n = 1)
+  this_df_w_l$lag_nvis_2 <- lag(this_df_w_l$n_recent_floods, n = 2)
+  this_df_w_l$lag_nvis_3 <- lag(this_df_w_l$n_recent_floods, n = 3)
+  this_df_w_l$lag_nvis_4 <- lag(this_df_w_l$n_recent_floods, n = 4)
   
   for(i in 1:nrow(this_df_w_l)) {
-    # TO add more covariance, for county 2 randomly add noise to the RR
+    
+    # To more accurately consider, for county 2 randomly add noise to the RR
     #
     #if (county_i == 2) {
     #  mult <- sample(c(0.5, 0.7, 1.4, 2), 1)
@@ -265,14 +280,32 @@ for(county_i in 1:N_COUNTIES) {
     
     ## main effect
     if(this_df_w_l$is_flood_week[i] == 1) {
-      this_df_w_l$n_cases[i] = this_df_w_l$RR[i] * this_df_w_l$case_baseline[i]
       
-      ## if there is a 'double-exposure' week, meaning flood in lag and week,
-      ## override with RR_double
-      if (this_df_w_l$is_flood_week[i] == 1 & this_df_w_l$double_flood[i] == 1) {
-        
-        this_df_w_l$n_cases[i] = this_df_w_l$RR_double[i] * this_df_w_l$case_baseline[i]
+      this_df_w_l$n_cases[i] = this_df_w_l$RR[i] * this_df_w_l$case_baseline[i] +
+        (this_df_w_l$RR_nvis[i] - 1 ) * this_df_w_l$n_recent_floods[i] * this_df_w_l$case_baseline[i] 
+      
+      if(i > 4) {
+        if(this_df_w_l$lag1[i] == 1 |
+           this_df_w_l$lag2[i] == 1 |
+           this_df_w_l$lag3[i] == 1 |
+           this_df_w_l$lag4[i] == 1)  {
+          this_df_w_l$n_cases[i] = this_df_w_l$n_cases[i] +
+            (this_df_w_l$RR_lag[i] * this_df_w_l$case_baseline[i] - this_df_w_l$case_baseline[i]) 
+          
+        }
       }
+      
+      if(i > 8) {
+        if(this_df_w_l$lag_nvis_1[i] >= 1 |
+           this_df_w_l$lag_nvis_2[i] >= 1 |
+           this_df_w_l$lag_nvis_3[i] >= 1 |
+           this_df_w_l$lag_nvis_4[i] >= 1)  {
+          this_df_w_l$n_cases[i] = this_df_w_l$n_cases[i] +
+            (this_df_w_l$RR_lag_nvis[i] - 1) * this_df_w_l$n_recent_floods[i] * this_df_w_l$case_baseline[i]
+          
+        }
+      }
+      
     }
     ## lagged effect
     else {
@@ -280,10 +313,22 @@ for(county_i in 1:N_COUNTIES) {
         if(this_df_w_l$lag1[i] == 1 |
            this_df_w_l$lag2[i] == 1 |
            this_df_w_l$lag3[i] == 1 |
-           this_df_w_l$lag4[i] == 1)  {
-          this_df_w_l$n_cases[i] = this_df_w_l$RR_lag[i] * this_df_w_l$case_baseline[i]
+           this_df_w_l$lag4[i] == 1) {
+          this_df_w_l$n_cases[i] = this_df_w_l$RR_lag[i] * this_df_w_l$case_baseline[i] +
+            (this_df_w_l$RR_nvis[i] - 1) * this_df_w_l$n_recent_floods[i] * this_df_w_l$case_baseline[i]
         }
       }
+      if(i > 8) {
+        if (this_df_w_l$lag_nvis_1[i] >= 1 |
+            this_df_w_l$lag_nvis_2[i] >= 1 |
+            this_df_w_l$lag_nvis_3[i] >= 1 |
+            this_df_w_l$lag_nvis_4[i] >= 1) {
+          this_df_w_l$n_cases[i] = this_df_w_l$n_cases[i] +
+            (this_df_w_l$RR_lag_nvis[i] - 1) * this_df_w_l$n_recent_floods[i] * this_df_w_l$case_baseline[i]
+          
+        }
+      }
+      
     }
   }
   df_weekly_l[[county_i]] <- this_df_w_l

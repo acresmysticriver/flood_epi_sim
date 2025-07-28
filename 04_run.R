@@ -6,9 +6,10 @@
 rm(list = ls()); gc()
 
 # COUNTY A
-RR_1     <- 2.10  # the RR on lag 0
-RR_1_lag <- 1.20  # the RR on lags 1:4
-RR_1_double <- 2.10  # the RR associated with flood on day and in lag
+RR_1     <- 2.00  # the RR on lag 0
+RR_1_lag <- 1.50  # the RR on lags 1:4
+RR_1_nvis <- 1.03  # the RR associated with each additional flood in recent weeks
+RR_1_lag_nvis <- 1.01  # the RR associated with each additional flood in lag weeks
 ybeta_1  <- 1.00  # the year trend (in log space, so 2 means doubling every year)
 bl <- 10000       # n case baseline 
 var <- 500        # variance in case by week
@@ -16,8 +17,10 @@ var <- 500        # variance in case by week
 # COUNTY B
 RR_2     <- 2.00  # the RR on lag 0
 RR_2_lag <- 1.00 # the RR on lags 1:4
-RR_2_double <- 2.30  # the RR associated with flood on day and in lag
+RR_2_nvis <- 1.03  # the RR associated with each additional flood in recent weeks
+RR_2_lag_nvis <- 1.01  # the RR associated with each additional flood in lag weeks
 ybeta_2  <- 1.00  # the year trend (in log space, so 2 means doubling every year)
+
 bl <- 10000       # n case baseline 
 var <- 500        # variance in case by week
 
@@ -67,7 +70,7 @@ dim(this_df)
 
 # test plot
  ggplot(this_df) + 
-   geom_point(aes(x = week_start, y = n_cases, col = double_flood)) +
+   geom_point(aes(x = week_start, y = n_cases, col = n_recent_floods)) +
    facet_wrap(~strata)
 
 # *****
@@ -101,118 +104,10 @@ for(att in attr_transfer) {
 # make the model
 N_YEARS = length(unique(this_df$year))
 
+
+# Run the cross-pred
 # **************
-# OK SO FIRST, JUST DO A SIMPLE MODEL TO MAKE SURE YOU KNOW
-# WHAT IS GOING ON
-mod.v0 <- gnm(n_cases ~ is_flood_week + 
-                # manually do lags
-                lag1 + lag2 + lag3 + lag4 +
-                # account for covariates
-                avg_tmp +
-                # ********
-                # and yearly time - I think just the decade, so just 2 knots?
-                # can iterate here, uncertain what is best
-                year +
-                ## add double flood marker
-                double_flood,
-              # ********
-              data = this_df,
-              family = quasipoisson,
-              eliminate = factor(strata),
-              subset = keep == 1,
-              na.action = 'na.exclude')
-
-summary(mod.v0)
-
-# AWESOME, this works
-# you see that the is_case_period coefficent and year reflects
-# what you set it as 
-
-t1 <- exp(confint(mod.v0))
-t1 <- data.frame(t1, var = row.names(t1), est = exp(coef(mod.v0)))
-colnames(t1)[1:2] <- c('lb', 'ub')
-t1
-# Example data structure assumed for conversion
-# t1 <- data.frame(var = c("A", "B", "C"), lb = c(1, 2, 3), est = c(2, 3, 4), ub = c(3, 4, 5))
-
-# Reverse the order of y-axis categories (to mimic ggplot behavior)
-# Set up blank plot with appropriate limits
-par(mar = c(5, 9, 4, 2))
-y_vals <-1:nrow(t1)
-plot(NULL,
-     xlim = range(c(t1$lb, t1$ub)),
-     ylim = range(1:nrow(t1)),
-     yaxt = "n",
-     xlab = "Estimate",
-     ylab = "",
-     main = "Base model")
-
-# Add y-axis labels
-axis(2, at = y_vals, labels = t1$var, las = 1)
-
-# Add segments (error bars)
-segments(x0 = t1$lb, x1 = t1$ub, y0 = y_vals, y1 = y_vals)
-
-# Add points (estimates)
-points(t1$est, y_vals, pch = 5, cex = 0.8)
-
-
-# **************
-# Next, try and make the year variable using ns()
-mod.v0b <- gnm(n_cases ~ is_flood_week +
-                 # manually do lags
-                 lag1 + lag2 + lag3 + lag4 +
-                 # is it double
-                double_flood +
-                 # account for covariates
-                 avg_tmp +
-                 # ********
-                 # and yearly time - I think just the decade, so just 2 knots?
-                 # can iterate here, uncertain what is best
-                 ns(week_iter, df = 4),
-               # ********
-               data = this_df,
-               family = quasipoisson,
-               eliminate = factor(strata),
-               subset = keep == 1,
-               na.action = 'na.exclude')
-
-summary(mod.v0b)
-
-# seems to work
-# you see that the is_case_period coefficent reflects
-# what you set it as
-exp(coef(mod.v0b))
-exp(confint(mod.v0b))
-# *************
-
-t1 <- exp(confint(mod.v0b))
-t1 <- data.frame(t1, var = row.names(t1), est = exp(coef(mod.v0b)))
-colnames(t1)[1:2] <- c('lb', 'ub')
-t1
-y_vals <-1:nrow(t1)
-par(mar = c(5, 9, 4, 2))
-plot(NULL,
-     xlim = range(c(t1$lb, t1$ub)),
-     ylim = range(1:nrow(t1)),
-     yaxt = "n",
-     xlab = "Estimate",
-     ylab = "",
-     main = "Base model with ns(year)")
-
-# Add y-axis labels
-axis(2, at = y_vals, labels = t1$var, las = 1)
-
-# Add segments (error bars)
-segments(x0 = t1$lb, x1 = t1$ub, y0 = y_vals, y1 = y_vals)
-
-# Add points (estimates)
-points(t1$est, y_vals, pch = 5, cex = 0.8)
-
-
-# Ok now try the cross-pred
-# **************
-mod.v1 <- gnm(n_cases ~ cb.flood_local +
+mod.v1 <- gnm(n_cases ~ cb.flood_local + is_flood_week +
                 # account for covariates
                 avg_tmp +
                 # ********
@@ -226,39 +121,26 @@ mod.v1 <- gnm(n_cases ~ cb.flood_local +
               subset = keep == 1,
               na.action = 'na.exclude')
 
+
 summary(mod.v1)
 
 # Ok this seems to work now as well
-cp <- crosspred(cb.flood_local, mod.v1, cen = 0, at = 1)
+cp <- crosspred(cb.flood_local, mod.v1)
 
 t1 <- data.frame(var = 'crosspred',
                  lb = cp$allRRlow,
                  ub = cp$allRRhigh,
                  est = cp$allRRfit)
 
-t1
-y_vals <-1
-par(mar = c(5, 9, 4, 2))
-plot(NULL,
-     xlim = range(c(t1$lb, t1$ub)),
-     ylim = range(1:nrow(t1)),
-     yaxt = "n",
-     xlab = "Estimate",
-     ylab = "",
-     main = "Overall with CB")
-
-# Add y-axis labels
-axis(2, at = y_vals, labels = t1$var, las = 1)
-
-# Add segments (error bars)
-segments(x0 = t1$lb, x1 = t1$ub, y0 = y_vals, y1 = y_vals)
-
-# Add points (estimates)
-points(t1$est, y_vals, pch = 5, cex = 0.8)
-
 # with lags
-plot(cp, 'slices', var = c(1),  main = 'CB with Lag')
+par(mfrow = c(3, 2))
+plot(cp, 'slices', var = c(1),  main = 'CB with Lag, 1')
+plot(cp, 'slices', var = c(2),  main = 'CB with Lag, 2')
+plot(cp, 'slices', var = c(3),  main = 'CB with Lag, 3')
+plot(cp, 'slices', var = c(4),  main = 'CB with Lag, 4')
+plot(cp, 'slices', var = c(5),  main = 'CB with Lag, 5')
 
+plot(cp, 'overall')
 
 # dev.off()
 

@@ -10,7 +10,7 @@ rm(list = ls()); gc()
 # COUNTY A
 RR_1     <- 2.00  # the RR on lag 0
 RR_1_lag <- 1.50  # the RR on lags 1:4
-RR_1_double <- 3  # the RR associated with flood on day and in lag
+RR_1_nvis <- 3  # the RR associated with flood on day and in lag
 ybeta_1  <- 1.00  # the year trend (in log space, so 2 means doubling every year)
 bl <- 10000       # n case baseline 
 var <- 500        # variance in case by week
@@ -18,7 +18,7 @@ var <- 500        # variance in case by week
 # COUNTY B
 RR_2     <- 3.00  # the RR on lag 0
 RR_2_lag <- 1.20 # the RR on lags 1:4
-RR_2_double <- 6  # the RR associated with flood on day and in lag
+RR_2_nvis <- 6  # the RR associated with flood on day and in lag
 ybeta_2  <- 1.00  # the year trend (in log space, so 2 means doubling every year)
 bl <- 100       # n case baseline 
 var <- 75        # variance in case by week
