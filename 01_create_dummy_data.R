@@ -39,8 +39,8 @@ set_cases <- function(df,
                       year_beta = 1.2,
                       RR = 2,
                       RR_lag = 1.0,
-                      RR_nvis = 1.02,
-                      RR_lag_nvis = 1.05) {
+                      RR_nvis = NULL,
+                      RR_lag_nvis = NULL) {
   
   # ******
   # df <- chicagoNMMAPS  
@@ -136,7 +136,7 @@ for(i in 1:nrow(df_struct)) {
   # ******
   
   # pick 
-  is_flood_week_per_year <- sample(c(1, 2, 5), 1)
+  is_flood_week_per_year <- sample(c(1, 2, 2, 2, 3), 1)
   
   # If there are any floods:
   # when does the first one occur
@@ -150,7 +150,7 @@ for(i in 1:nrow(df_struct)) {
   while(is_flood_week_per_year > 1) {
     
     # there's a 70% chance its the following week
-    is_next <- sample(c(0,1), 1, prob = c(0.3, 0.7))
+    is_next <- sample(c(0,1), 1, prob = c(0.7, 0.3))
     
     # if its next, just add 7 to first flood day or -7 if its > 350
     if(is_next == 1) {
@@ -285,24 +285,20 @@ for(county_i in 1:N_COUNTIES) {
         (this_df_w_l$RR_nvis[i] - 1 ) * this_df_w_l$n_recent_floods[i] * this_df_w_l$case_baseline[i] 
       
       if(i > 4) {
-        if(this_df_w_l$lag1[i] == 1 |
-           this_df_w_l$lag2[i] == 1 |
-           this_df_w_l$lag3[i] == 1 |
-           this_df_w_l$lag4[i] == 1)  {
-          this_df_w_l$n_cases[i] = this_df_w_l$n_cases[i] +
-            (this_df_w_l$RR_lag[i] * this_df_w_l$case_baseline[i] - this_df_w_l$case_baseline[i]) 
-          
+        for (j in c(1:4)) {
+          if(this_df_w_l[[paste0("lag", j)]][i] == 1) {
+            this_df_w_l$n_cases[i] = this_df_w_l$n_cases[i] +
+              (this_df_w_l$RR_lag[i] * this_df_w_l$n_cases[i] - this_df_w_l$n_cases[i]) 
+          }
         }
       }
       
       if(i > 8) {
-        if(this_df_w_l$lag_nvis_1[i] >= 1 |
-           this_df_w_l$lag_nvis_2[i] >= 1 |
-           this_df_w_l$lag_nvis_3[i] >= 1 |
-           this_df_w_l$lag_nvis_4[i] >= 1)  {
-          this_df_w_l$n_cases[i] = this_df_w_l$n_cases[i] +
-            (this_df_w_l$RR_lag_nvis[i] - 1) * this_df_w_l$n_recent_floods[i] * this_df_w_l$case_baseline[i]
-          
+        for (j in c(1:4)) {
+          if(this_df_w_l[[paste0("lag_nvis_", j)]][i] == 1) {
+            this_df_w_l$n_cases[i] = this_df_w_l$n_cases[i] +
+              (this_df_w_l$RR_lag_nvis[i] - 1) * this_df_w_l$n_recent_floods[i] * this_df_w_l$n_cases[i]
+          }
         }
       }
       
@@ -310,22 +306,19 @@ for(county_i in 1:N_COUNTIES) {
     ## lagged effect
     else {
       if(i > 4) {
-        if(this_df_w_l$lag1[i] == 1 |
-           this_df_w_l$lag2[i] == 1 |
-           this_df_w_l$lag3[i] == 1 |
-           this_df_w_l$lag4[i] == 1) {
-          this_df_w_l$n_cases[i] = this_df_w_l$RR_lag[i] * this_df_w_l$case_baseline[i] +
-            (this_df_w_l$RR_nvis[i] - 1) * this_df_w_l$n_recent_floods[i] * this_df_w_l$case_baseline[i]
+        for (j in c(1:4)) {
+          if(this_df_w_l[[paste0("lag", j)]][i] == 1) {
+            this_df_w_l$n_cases[i] = this_df_w_l$n_cases[i] +
+              (this_df_w_l$RR_lag[i] * this_df_w_l$n_cases[i] - this_df_w_l$n_cases[i]) 
+          }
         }
       }
       if(i > 8) {
-        if (this_df_w_l$lag_nvis_1[i] >= 1 |
-            this_df_w_l$lag_nvis_2[i] >= 1 |
-            this_df_w_l$lag_nvis_3[i] >= 1 |
-            this_df_w_l$lag_nvis_4[i] >= 1) {
-          this_df_w_l$n_cases[i] = this_df_w_l$n_cases[i] +
-            (this_df_w_l$RR_lag_nvis[i] - 1) * this_df_w_l$n_recent_floods[i] * this_df_w_l$case_baseline[i]
-          
+        for (j in c(1:4)) {
+          if(this_df_w_l[[paste0("lag_nvis_", j)]][i] == 1) {
+            this_df_w_l$n_cases[i] = this_df_w_l$n_cases[i] +
+              (this_df_w_l$RR_lag_nvis[i] - 1) * this_df_w_l$n_recent_floods[i] * this_df_w_l$n_cases[i]
+          }
         }
       }
       
