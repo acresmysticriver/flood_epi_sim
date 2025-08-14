@@ -75,15 +75,27 @@ make_strata <- function(strata_i) {
       search_for_prior = F
     }
     
-    # next, it has a flood in it, so iterate year and try again
-    if(any(prior_data$is_flood_week == 1) |
-       any(prior_data$lag1 == 1) |
-       any(prior_data$lag2 == 1) |
-       any(prior_data$lag3 == 1) |
-       any(prior_data$lag4 == 1)) {
-      search_for_prior = T
+    # Assess based on input controlselect
+    #
+    if (control_select == "noflood") {
+      # next, it has a flood in it, so iterate year and try again
+      if(any(prior_data$is_flood_week == 1) ) {
+        search_for_prior = T
+        year_i = year_i + 1 # search back further
+      } 
+    } else if (control_select == "nolag") {
+      # next, it has a flood in it, so iterate year and try again
+      if(any(prior_data$is_flood_week == 1) |
+         any(prior_data$lag1  == 1) |
+         any(prior_data$lag2  == 1) |
+         any(prior_data$lag3  == 1) |
+         any(prior_data$lag4  == 1) ) {
+        search_for_prior = T
+        year_i = year_i + 1 # search back further
+      } 
+    } else {
       year_i = year_i + 1 # search back further
-    } 
+    }
   }
   
   # ----------
@@ -112,15 +124,27 @@ make_strata <- function(strata_i) {
       search_for_post = F
     }
     
-    # next, it has a flood in it, so iterate year and try again
-    if(any(post_data$is_flood_week == 1) |
-       any(post_data$lag1 == 1) |
-       any(post_data$lag2 == 1) |
-       any(post_data$lag3 == 1) |
-       any(post_data$lag4 == 1)) {
-      search_for_post = T
+    # Assess based on input controlselect
+    #
+    if (control_select == "noflood") {
+      # next, it has a flood in it, so iterate year and try again
+      if(any(post_data$is_flood_week == 1) ) {
+        search_for_post = T
+        year_i = year_i + 1 # search back further
+      } 
+    } else if (control_select == "nolag") {
+      # next, it has a flood in it, so iterate year and try again
+      if(any(post_data$is_flood_week == 1) |
+         any(post_data$lag1  == 1) |
+         any(post_data$lag2  == 1) |
+         any(post_data$lag3  == 1) |
+         any(post_data$lag4  == 1) ) {
+        search_for_post = T
+        year_i = year_i + 1 # search back further
+      } 
+    } else {
       year_i = year_i + 1 # search back further
-    } 
+    }
   }
   
   # ----- 

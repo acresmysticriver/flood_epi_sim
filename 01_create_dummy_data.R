@@ -18,6 +18,10 @@ library(splines)
 library(future)
 library(future.apply)
 library(patchwork)
+library(zoo) # rollapply for lagging
+library(purrr)
+library(tidyr)
+library(data.table)
 
 set.seed(123)
 plan(multisession)
@@ -28,10 +32,14 @@ plan(multisession)
 # /////////////////////////////////////////////////////////////////////////////
 # -----------------------------------------------------------------------------
 
+# Investigate dummy data from dlnm package
 head(chicagoNMMAPS)
 summary(chicagoNMMAPS$date)
 
 # reset cases based on a year trend
+# This function is set up to take in information about the size of a county, 
+# and relative risks of flooding/flood lags
+#
 set_cases <- function(df, 
                       baseline = 10000, 
                       variance = 500,
@@ -98,8 +106,8 @@ set_cases <- function(df,
 # create fake data for two counties
 # first, lets try with no year trend (so year_beta = 1)
 x1 <- set_cases(chicagoNMMAPS, 
-                baseline = bl,
-                variance = var, 
+                baseline = bl_1,
+                variance = var_1, 
                 year_beta = ybeta_1, 
                 RR = RR_1, 
                 RR_lag = RR_1_lag,
@@ -107,8 +115,8 @@ x1 <- set_cases(chicagoNMMAPS,
                 RR_lag_nvis = RR_1_lag_nvis)
 
 x2 <- set_cases(chicagoNMMAPS, 
-                baseline = bl,
-                variance = var, 
+                baseline = bl_2,
+                variance = var_2, 
                 year_beta = ybeta_2, 
                 RR = RR_2, 
                 RR_lag = RR_2_lag,
@@ -135,8 +143,8 @@ for(i in 1:nrow(df_struct)) {
   # i = 1
   # ******
   
-  # pick 
-  is_flood_week_per_year <- sample(c(1, 2, 2, 2, 3), 1)
+  # pick N flood weeks in year
+  is_flood_week_per_year <- sample(samp_set, 1)
   
   # If there are any floods:
   # when does the first one occur
@@ -150,7 +158,7 @@ for(i in 1:nrow(df_struct)) {
   while(is_flood_week_per_year > 1) {
     
     # there's a 70% chance its the following week
-    is_next <- sample(c(0,1), 1, prob = c(0.7, 0.3))
+    is_next <- sample(c(0,1), 1, prob = c(rep_prob, 1- rep_prob))
     
     # if its next, just add 7 to first flood day or -7 if its > 350
     if(is_next == 1) {
@@ -181,6 +189,12 @@ for(i in 1:nrow(df_struct)) {
 # to data frame
 flood_days_df <- do.call(rbind, flood_days_l)
 flood_days_df$is_flood_day <- T
+
+# keep one of each county-date
+#
+flood_days_df <- flood_days_df %>%
+  group_by(flood_day, year, county) %>%
+  slice(1)
 
 # join to our dataset by doy
 df_w_exp <- left_join(df, flood_days_df,
@@ -220,6 +234,12 @@ df_weekly$n_recent_floods <- NA
 for(i in 5:nrow(df_weekly)) {
   df_weekly$n_recent_floods[i] <- sum(df_weekly$is_flood_week[(i-4):i])
 }
+
+# only maintain n_recent_floods for flood weeks. We will carry this through
+# in lag for showing recent floods in non-weeks. Now we have a variable that
+# essentially represents the week of consecutive or near-consecutive flooding
+df_weekly$n_recent_floods <- ifelse(df_weekly$is_flood_week == 0, 0, df_weekly$n_recent_floods)
+df_weekly$n_recent_floods <- pmax(0, df_weekly$n_recent_floods -1 )
 
 # remove any week that doesn't have 7 days
 df_weekly <- df_weekly %>% filter(n_days_in_this_week == 7)
@@ -281,8 +301,9 @@ for(county_i in 1:N_COUNTIES) {
     ## main effect
     if(this_df_w_l$is_flood_week[i] == 1) {
       
-      this_df_w_l$n_cases[i] = this_df_w_l$RR[i] * this_df_w_l$case_baseline[i] +
-        (this_df_w_l$RR_nvis[i] - 1 ) * this_df_w_l$n_recent_floods[i] * this_df_w_l$case_baseline[i] 
+      this_df_w_l$n_cases[i] = this_df_w_l$RR[i] * this_df_w_l$case_baseline[i] 
+      this_df_w_l$n_cases[i] = this_df_w_l$n_cases[i] +
+        (this_df_w_l$RR_nvis[i] - 1 ) * this_df_w_l$n_recent_floods[i] * this_df_w_l$n_cases[i] 
       
       if(i > 4) {
         for (j in c(1:4)) {
@@ -295,9 +316,9 @@ for(county_i in 1:N_COUNTIES) {
       
       if(i > 8) {
         for (j in c(1:4)) {
-          if(this_df_w_l[[paste0("lag_nvis_", j)]][i] == 1) {
+          if(this_df_w_l[[paste0("lag_nvis_", j)]][i] >= 1) {
             this_df_w_l$n_cases[i] = this_df_w_l$n_cases[i] +
-              (this_df_w_l$RR_lag_nvis[i] - 1) * this_df_w_l$n_recent_floods[i] * this_df_w_l$n_cases[i]
+              (this_df_w_l$RR_lag_nvis[i] - 1) * this_df_w_l[[paste0("lag_nvis_", j)]][i] * this_df_w_l$n_cases[i]
           }
         }
       }
@@ -315,9 +336,9 @@ for(county_i in 1:N_COUNTIES) {
       }
       if(i > 8) {
         for (j in c(1:4)) {
-          if(this_df_w_l[[paste0("lag_nvis_", j)]][i] == 1) {
+          if(this_df_w_l[[paste0("lag_nvis_", j)]][i] >= 1) {
             this_df_w_l$n_cases[i] = this_df_w_l$n_cases[i] +
-              (this_df_w_l$RR_lag_nvis[i] - 1) * this_df_w_l$n_recent_floods[i] * this_df_w_l$n_cases[i]
+              (this_df_w_l$RR_lag_nvis[i] - 1) * this_df_w_l[[paste0("lag_nvis_", j)]][i] * this_df_w_l$n_cases[i]
           }
         }
       }
@@ -329,5 +350,36 @@ for(county_i in 1:N_COUNTIES) {
 
 df_weekly <- do.call(rbind, df_weekly_l)
 
+# Apply method that will characterize types of floods
+# Add flag for length of consecutive flood weeks
+#
+df_weekly <- df_weekly  %>%
+  arrange(county, year, week_num) %>%
+  group_by(county, year) %>%
+  mutate(
+    flood_run = ifelse(is_flood_week==1, rleid(is_flood_week), NA)
+  ) %>% ungroup()
 
+## Assign week_within_flood
+df_weekly <- df_weekly %>%
+  group_by(county, year, flood_run) %>%
+  mutate(week_within_flood = ifelse(is_flood_week==1, row_number(), NA)) %>%
+  ungroup()
+
+## Make categorical: NoFlood, Flood_Week1, Flood_Week2, Flood_Week3plus
+df_weekly <- df_weekly %>%
+  mutate(
+    flood_cat = case_when(
+      is.na(week_within_flood) ~ "NoFlood",
+      week_within_flood == 1 ~ "Flood_Week1",
+      week_within_flood == 2 ~ "Flood_Week2",
+      week_within_flood >= 3 ~ "Flood_Week3plus"
+    ),
+    flood_cat = factor(flood_cat, 
+                       levels = c("NoFlood","Flood_Week1","Flood_Week2","Flood_Week3plus"))
+  )
+
+df_weekly$exp1 <- (df_weekly$flood_cat == "Flood_Week1")*1
+df_weekly$exp2 <- (df_weekly$flood_cat == "Flood_Week2")*1
+df_weekly$exp3 <- (df_weekly$flood_cat == "Flood_Week3plus")*1
 

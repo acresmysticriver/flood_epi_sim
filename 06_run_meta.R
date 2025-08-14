@@ -7,21 +7,33 @@ library(mvmeta)
 # clear
 rm(list = ls()); gc()
 
+# set whether controls for windows should have no flood in the window (noflood),
+# no lag in the window (nolag), or no restricitons on flood/lag (norest) 
+control_select <- "noflood"
+
+# set series of probabilities for flood in a year
+samp_set <- c(0, 0, 1, 1, 6, 8)
+
+# set likelihood of back-to-back flood weeks
+rep_prob <- 0.8
+
 # COUNTY A
 RR_1     <- 2.00  # the RR on lag 0
-RR_1_lag <- 1.50  # the RR on lags 1:4
-RR_1_nvis <- 3  # the RR associated with flood on day and in lag
+RR_1_lag <- 1.05  # the RR on lags 1:4
+RR_1_nvis <- 0.9  # the RR associated with each additional flood in recent weeks
+RR_1_lag_nvis <- 1.03  # the RR associated with each additional flood in lag weeks
 ybeta_1  <- 1.00  # the year trend (in log space, so 2 means doubling every year)
-bl <- 10000       # n case baseline 
-var <- 500        # variance in case by week
+bl_1 <- 10000      # n case baseline 
+var_1 <- 500       # variance in case by week
 
 # COUNTY B
-RR_2     <- 3.00  # the RR on lag 0
-RR_2_lag <- 1.20 # the RR on lags 1:4
-RR_2_nvis <- 6  # the RR associated with flood on day and in lag
+RR_2     <- 1.60  # the RR on lag 0
+RR_2_lag <- 1.08 # the RR on lags 1:4
+RR_2_nvis <- 1.20  # the RR associated with each additional flood in recent weeks
+RR_2_lag_nvis <- 1.03  # the RR associated with each additional flood in lag weeks
 ybeta_2  <- 1.00  # the year trend (in log space, so 2 means doubling every year)
-bl <- 100       # n case baseline 
-var <- 75        # variance in case by week
+bl_2 <- 10000      # n case baseline 
+var_2 <- 500       # variance in case by week
 
 source('01_create_dummy_data.R')
 source('02_create_sliding_windows.R')
@@ -63,7 +75,7 @@ for (county_i in c(1:2)) {
   
   # loop through model types
   #
-  for (mod_type in c("double_flood")) {
+  for (mod_type in c("year", "spline")) {
     
     # Track runs
     #
@@ -83,16 +95,17 @@ for (county_i in c(1:2)) {
     if (mod_type == "year") {
       formula_run <- as.formula("n_cases ~ is_flood_week + 
                               lag1 + lag2 + lag3 + lag4 +
-                              avg_tmp + year")
+                              n_recent_floods +
+                               lag_nvis_1  + lag_nvis_2 + lag_nvis_3  + lag_nvis_4  + 
+                              avg_tmp +
+                              year")
     } else if (mod_type == "spline") {
       formula_run <- as.formula("n_cases ~ is_flood_week + 
                               lag1 + lag2 + lag3 + lag4 +
+                              n_recent_floods +
+                               lag_nvis_1  + lag_nvis_2 + lag_nvis_3  + lag_nvis_4  + 
                               avg_tmp +
                               ns(week_iter, df = 4)")
-    } else if (mod_type == "doubleflood") {
-      formula_run <- as.formula("n_cases ~ is_flood_week + 
-                              lag1 + lag2 + lag3 + lag4 +
-                              avg_tmp + year + double_flood")
     }
     
     # Run function
