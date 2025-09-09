@@ -9,31 +9,31 @@ rm(list = ls()); gc()
 
 # set whether controls for windows should have no flood in the window (noflood),
 # no lag in the window (nolag), or no restricitons on flood/lag (norest) 
-control_select <- "noflood"
+control_select <- "nolag"
 
 # set series of probabilities for flood in a year
-samp_set <- c(0, 0, 1, 1, 6, 8)
+samp_set <- c(0, 1, 2, 4, 9, 10, 11)
 
 # set likelihood of back-to-back flood weeks
-rep_prob <- 0.8
+rep_prob <- 0.7
 
 # COUNTY A
 RR_1     <- 2.00  # the RR on lag 0
-RR_1_lag <- 1.05  # the RR on lags 1:4
-RR_1_nvis <- 0.9  # the RR associated with each additional flood in recent weeks
-RR_1_lag_nvis <- 1.03  # the RR associated with each additional flood in lag weeks
+RR_1_lag <- 1.50  # the RR on lags 1:4
+RR_1_nvis <- 1.20  # the RR associated with each additional flood in recent weeks
+RR_1_lag_nvis <- 1.05  # the RR associated with each additional flood in lag weeks
 ybeta_1  <- 1.00  # the year trend (in log space, so 2 means doubling every year)
-bl_1 <- 10000      # n case baseline 
-var_1 <- 500       # variance in case by week
+bl_1 <- 1000000000      # n case baseline 
+var_1 <- 50       # variance in case by week
 
 # COUNTY B
-RR_2     <- 1.60  # the RR on lag 0
-RR_2_lag <- 1.08 # the RR on lags 1:4
-RR_2_nvis <- 1.20  # the RR associated with each additional flood in recent weeks
+RR_2     <- 1.02  # the RR on lag 0
+RR_2_lag <- 1.03 # the RR on lags 1:4
+RR_2_nvis <- 1.01  # the RR associated with each additional flood in recent weeks
 RR_2_lag_nvis <- 1.03  # the RR associated with each additional flood in lag weeks
 ybeta_2  <- 1.00  # the year trend (in log space, so 2 means doubling every year)
 bl_2 <- 10000      # n case baseline 
-var_2 <- 500       # variance in case by week
+var_2 <- 4000       # variance in case by week
 
 source('01_create_dummy_data.R')
 source('02_create_sliding_windows.R')
@@ -58,6 +58,13 @@ N_COUNTIES <- length(COUNTIES)
 
 # then resplit based on county
 county_l <- split(expanded_df, f = expanded_df$county)
+
+# Check data
+#
+ggplot(expanded_df) + 
+  geom_point(aes(x = week_start, y = n_cases, col = is_flood_week, group = strata),
+             position = position_dodge(width = 1)) +
+  facet_grid(cols = vars(county))
 
 # Set list to capture coefficients and covariance
 #
@@ -189,3 +196,7 @@ for (pattern_in in c("year", "spline")) {
   }
   
 }
+
+ggplot(all_stack_cumul[all_stack_cumul$type == "year",]) +
+  geom_point(aes(y = var, x = est))+
+  geom_errorbar(aes(y = var, xmin = lb, xmax = ub))

@@ -7,21 +7,26 @@ rm(list = ls()); gc()
 
 # set whether controls for windows should have no flood in the window (noflood),
 # no lag in the window (nolag), or no restricitons on flood/lag (norest) 
-control_select <- "noflood"
+control_select <- "nolag"
+
+# set whether the effect of a multi-week flood
 
 # set series of probabilities for flood in a year
-samp_set <- c(0, 0, 1, 1, 6, 8)
+samp_set <- c(1, 2, 6, 7, 7, 10)
 
 # set likelihood of back-to-back flood weeks
-rep_prob <- 0.8
+rep_prob <- 0.95
+
+# set how many weeks to use in lag
+lag_weeks <- 4
 
 # COUNTY A
 RR_1     <- 2.00  # the RR on lag 0
-RR_1_lag <- 1.05  # the RR on lags 1:4
-RR_1_nvis <- 0.9  # the RR associated with each additional flood in recent weeks
-RR_1_lag_nvis <- 1.03  # the RR associated with each additional flood in lag weeks
+RR_1_lag <- 1.15  # the RR on lags 1:4
+RR_1_nvis <- 1.035  # the RR associated with each additional flood in recent weeks
+RR_1_lag_nvis <- 1.02  # the RR associated with each additional flood in lag weeks
 ybeta_1  <- 1.00  # the year trend (in log space, so 2 means doubling every year)
-bl_1 <- 10000      # n case baseline 
+bl_1 <- 1000000      # n case baseline 
 var_1 <- 500       # variance in case by week
 
 # COUNTY B
@@ -84,13 +89,34 @@ this_df <- this_df %>%
   group_by(strata) %>%
   mutate(max_n_rec = max(n_recent_floods))
 
-# test plot
+# See what the minimum case is within each case strata
+#
+check_mincase <- this_df %>%
+  group_by(strata) %>% 
+  filter(period_label == "case") %>%
+  summarise(min_cases = min(n_cases))
+
+# # test plot
  ggplot(this_df# [this_df$strata %in% c("CountyA_Flood01", "CountyA_Flood02") & this_df$year == 1987,]
-        ) + 
+        ) +
    geom_point(aes(x = week_start, y = n_cases, col = is_flood_week, group = strata),
               position = position_dodge(width = 1)) +
    facet_grid(cols = vars(max_n_rec))
-# 
+ # # 
+ # ggplot(this_df[this_df$max_n_rec == 3 & this_df$strata == "CountyA_Flood19", ]
+ # ) +
+ #   geom_point(aes(x = week_start, y = n_cases, col = is_flood_week, group = strata),
+ #              position = position_dodge(width = 1)) +
+ #   facet_grid(cols = vars(max_n_rec))
+ # # 
+ # ggplot(this_df[this_df$strata == "CountyA_Flood17" ,]
+ # ) +
+ #   geom_point(aes(x = week_start, y = n_cases, col = is_flood_week, group = strata),
+ #              position = position_dodge(width = 1)) +
+ #   facet_grid(cols = vars(year), scales = "free_x")
+
+#
+
 # re-estimate case to make sure it matches expectation
  # this_df$n_case_exp <- this_df$case_baseline + (this_df$case_baseline * (this_df$RR - 1) * this_df$is_flood_week)
  # this_df$n_case_exp <- this_df$n_case_exp + (this_df$n_case_exp * (this_df$RR_lag - 1) * this_df$lag1)
@@ -106,7 +132,7 @@ this_df <- this_df %>%
  # this_df$case_diff <-  this_df$n_case_exp - this_df$n_cases
  # 
  # this_df$prop <- this_df$case_diff / this_df$n_cases
- # 
+
 # *****
 # tricky part #1
 # in the model also control for time
@@ -135,10 +161,20 @@ cb.flood.flood3_local <- cb.flood.flood3[this_df$row_id, ]
 attr_transfer <- c('df', 'range', 'lag', 'argvar', 
                    'arglag', 'group', 'class')
 for(att in attr_transfer) {
+  # This crossbasis is based on the cumulative flood indicator
+  # (ie: second week of flood = 2, third = 3...)
   attr(cb.flood.nflood_local, att) <- attr(cb.flood.nflood, att)
+  
+  # Crossbasis for flood_week indicator (0, 1)
   attr(cb.flood.strata_local, att) <- attr(cb.flood.strat, att)
+  
+  # Cross basis for exp1 indicator (only first week of flooding)
   attr(cb.flood.flood1_local, att) <- attr(cb.flood.flood1, att)
+  
+  # Cross basis for exp2 indicator (only second week of flooding)
   attr(cb.flood.flood2_local, att) <- attr(cb.flood.flood2, att)
+  
+  # Cross basis for exp3 indicator (only third week of flooding)
   attr(cb.flood.flood3_local, att) <- attr(cb.flood.flood3, att)
 }
 # *****
@@ -164,6 +200,7 @@ mod.v0 <- gnm(n_cases ~ is_flood_week + n_recent_floods +
                # manually do lags
                 lag1 + lag2 + lag3 + lag4 +
                 lag_nvis_1  + lag_nvis_2 + lag_nvis_3  + lag_nvis_4  + 
+                
                # account for covariates
                avg_tmp +
                # ********
@@ -234,7 +271,7 @@ par(mfrow = c(2, 2))
 plot(cp.strata, 'slices', var = c(1),  main = 'CB for Is Flood Week == 1')
 plot(cp.strata, 'overall')
 
-plot(cp.nvis.strata, 'slices', var = c(2),  main = 'CB For N Recent Floods == 2')
+plot(cp.nvis.strata, 'slices', var = c(1),  main = 'CB For N Recent Floods == 2')
 plot(cp.nvis.strata, 'overall')
 # dev.off()
 
@@ -367,3 +404,4 @@ t0_3 <- exp(confint(mod.v3_three))
 t0_3 <- data.frame(t0_3, var = row.names(t0_3), est = exp(coef(mod.v3_three)))
 colnames(t0_3)[1:2] <- c('lb', 'ub')
 t0_3
+

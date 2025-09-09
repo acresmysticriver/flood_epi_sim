@@ -287,7 +287,7 @@ for(county_i in 1:N_COUNTIES) {
   this_df_w_l$lag_nvis_2 <- lag(this_df_w_l$n_recent_floods, n = 2)
   this_df_w_l$lag_nvis_3 <- lag(this_df_w_l$n_recent_floods, n = 3)
   this_df_w_l$lag_nvis_4 <- lag(this_df_w_l$n_recent_floods, n = 4)
-  
+ 
   for(i in 1:nrow(this_df_w_l)) {
     
     # To more accurately consider, for county 2 randomly add noise to the RR
@@ -299,52 +299,38 @@ for(county_i in 1:N_COUNTIES) {
     #}
     
     ## main effect
-    if(this_df_w_l$is_flood_week[i] == 1) {
-      
+    if (this_df_w_l$is_flood_week[i] == 1) {
       this_df_w_l$n_cases[i] = this_df_w_l$RR[i] * this_df_w_l$case_baseline[i] 
-      this_df_w_l$n_cases[i] = this_df_w_l$n_cases[i] +
-        (this_df_w_l$RR_nvis[i] - 1 ) * this_df_w_l$n_recent_floods[i] * this_df_w_l$n_cases[i] 
-      
-      if(i > 4) {
+    } else {
+      this_df_w_l$n_cases[i] = this_df_w_l$case_baseline[i]
+    }
+     
+    if(i > 4) {
         for (j in c(1:4)) {
           if(this_df_w_l[[paste0("lag", j)]][i] == 1) {
-            this_df_w_l$n_cases[i] = this_df_w_l$n_cases[i] +
-              (this_df_w_l$RR_lag[i] * this_df_w_l$n_cases[i] - this_df_w_l$n_cases[i]) 
+            this_df_w_l$n_cases[i] = this_df_w_l$RR_lag[i] * this_df_w_l$n_cases[i] 
           }
         }
       }
       
-      if(i > 8) {
+      if(i > 2*4) {
+        
+        if (this_df_w_l$n_recent_floods[i] >= 1) {
+          this_df_w_l$n_cases[i] = this_df_w_l$n_cases[i] +
+            ((this_df_w_l$RR_nvis[i] ^ this_df_w_l$n_recent_floods[i]) - 1) * this_df_w_l$n_cases[i]
+        } else {
+          this_df_w_l$n_cases[i] = this_df_w_l$n_cases[i]
+        }
+        
         for (j in c(1:4)) {
           if(this_df_w_l[[paste0("lag_nvis_", j)]][i] >= 1) {
             this_df_w_l$n_cases[i] = this_df_w_l$n_cases[i] +
-              (this_df_w_l$RR_lag_nvis[i] - 1) * this_df_w_l[[paste0("lag_nvis_", j)]][i] * this_df_w_l$n_cases[i]
+              ((this_df_w_l$RR_lag_nvis[i] ^ this_df_w_l[[paste0("lag_nvis_", j)]][i]) - 1) * this_df_w_l$n_cases[i] 
           }
         }
       }
-      
-    }
-    ## lagged effect
-    else {
-      if(i > 4) {
-        for (j in c(1:4)) {
-          if(this_df_w_l[[paste0("lag", j)]][i] == 1) {
-            this_df_w_l$n_cases[i] = this_df_w_l$n_cases[i] +
-              (this_df_w_l$RR_lag[i] * this_df_w_l$n_cases[i] - this_df_w_l$n_cases[i]) 
-          }
-        }
-      }
-      if(i > 8) {
-        for (j in c(1:4)) {
-          if(this_df_w_l[[paste0("lag_nvis_", j)]][i] >= 1) {
-            this_df_w_l$n_cases[i] = this_df_w_l$n_cases[i] +
-              (this_df_w_l$RR_lag_nvis[i] - 1) * this_df_w_l[[paste0("lag_nvis_", j)]][i] * this_df_w_l$n_cases[i]
-          }
-        }
-      }
-      
-    }
   }
+    
   df_weekly_l[[county_i]] <- this_df_w_l
 }
 
