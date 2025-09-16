@@ -1,0 +1,96 @@
+# -----------------------------------------------------------------------------
+# /////////////////////////////////////////////////////////////////////////////
+# Code for Simulating Weekly Flooding Epi Analysis
+#
+# We will create conditional Quasi-Poisson selecting on county and week. 
+# We use two-stage selection with sliding strata on years before and after a 
+# flood event, following the proces defined as in the Aggarwal et al. 
+# pre-print: https://arxiv.org/abs/2309.13142
+#
+# P1:
+#       Setting up data for simulated epi analysis.
+#             1) Create Dummy Exposure Data
+#                   i) Bring in dlnm base data and restructure for flood use
+# 
+# /////////////////////////////////////////////////////////////////////////////
+# -----------------------------------------------------------------------------
+
+library(dlnm)
+library(tidyverse)
+library(lubridate)
+library(gnm)
+library(splines)
+library(future)
+library(future.apply)
+library(patchwork)
+library(zoo)
+library(purrr)
+library(tidyr)
+library(data.table)
+
+set.seed(123)
+plan(multisession)
+
+# -----------------------------------------------------------------------------
+# /////////////////////////////////////////////////////////////////////////////
+# CREATE DUMMY EXPOSURE DATA
+# /////////////////////////////////////////////////////////////////////////////
+# -----------------------------------------------------------------------------
+
+# Investigate dummy data from dlnm package. The data includes a daily time 
+# series, with death counts (including cause-specific counts) and different
+# environmental variables (temp, dewpt, humidity, pm2.5, o3). We will use this 
+# structure but replace the input to be suitable to changes in parameters for 
+# a baseline sample size, and for flood-based exposure inputs.
+#
+head(chicagoNMMAPS)
+summary(chicagoNMMAPS)
+
+# Set parameters for input data, baseline case number, variance in case count,
+# baseline year, RR (year_beta) to be used for time trend and RR (RR) to be used
+# for flood effect.
+#
+df <- chicagoNMMAPS
+baseline = 100
+variance = 5
+baseline_yr = 1987
+year_beta = 1.0
+RR = 1 
+
+# Arrange dataset by date and split into annual subsets
+#
+df <- df %>% arrange(date)
+df_l <- split(df, f = df$year)
+n_years <- length(df_l)
+
+# Loop through the different years to
+for(yr_i in 1:n_years) {
+  
+  # Subset to single year as applicable
+  # *****
+  # yr_i = 1
+  # *****
+  
+  n_rows <- nrow(df_l[[yr_i]])
+  
+  # need to work in log-space so the coefficients work out
+  df_l[[yr_i]]$death_true = 
+    # baseline + how much to increase by year
+    baseline * (year_beta)^(df_l[[yr_i]]$year - baseline_yr)
+  
+  # add some random noise
+  v1 <- sample(c(-1, 0, 1), size = n_rows, replace = T) 
+  v2 <- rpois(n_rows, variance)
+  df_l[[yr_i]]$v1 <- v1
+  df_l[[yr_i]]$v2 <- v2
+  df_l[[yr_i]]$death = df_l[[yr_i]]$death_true + v1 * v2
+  
+  # make sure its an integer
+  df_l[[yr_i]]$death <- round(df_l[[yr_i]]$death)
+  
+  
+}
+
+df <- do.call(rbind, df_l)
+
+df$RR <- RR

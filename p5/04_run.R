@@ -35,8 +35,8 @@ RR_2_lag <- 1.08 # the RR on lags 1:4
 RR_2_nvis <- 1.20  # the RR associated with each additional flood in recent weeks
 RR_2_lag_nvis <- 1.03  # the RR associated with each additional flood in lag weeks
 ybeta_2  <- 1.00  # the year trend (in log space, so 2 means doubling every year)
-bl_2 <- 10000      # n case baseline 
-var_2 <- 500       # variance in case by week
+bl_2 <- 100000000      # n case baseline 
+var_2 <- 5000       # variance in case by week
 
 source('01_create_dummy_data.R')
 source('02_create_sliding_windows.R')
@@ -62,7 +62,7 @@ N_COUNTIES <- length(COUNTIES)
 # then resplit based on county
 county_l <- split(expanded_df, f = expanded_df$county)
 
-county_i = 1
+county_i = 2
 
 this_df <- county_l[[county_i]]
 dim(this_df)
