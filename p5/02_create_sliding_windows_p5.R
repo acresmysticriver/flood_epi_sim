@@ -25,6 +25,12 @@
 #                   rep_prob, etc. are replaced to take in the variables 
 #                   provided in script 4.
 #                   ii) No change to script 2
+#             5) Update scripts to account for added impact of consecutive
+#               flood weeks, add script for cross-county meta regression.
+#                   i) We will now pass additional RRs for the impact of
+#                   multi-week floods (RR_nflood), as well as for the lag after a 
+#                   multi-week flood (RR_lag_nflood).
+#                   ii) No change to script 2
 # /////////////////////////////////////////////////////////////////////////////
 # -----------------------------------------------------------------------------
 

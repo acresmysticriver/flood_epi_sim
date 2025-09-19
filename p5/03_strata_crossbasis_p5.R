@@ -26,6 +26,14 @@
 #                   provided in script 4.
 #                   ii) No changes to script 2
 #                   iii) Create cross basis to estimate lag effect of flooding.
+#             5) Update scripts to account for added impact of consecutive
+#               flood weeks, add script for cross-county meta regression.
+#                   i) We will now pass additional RRs for the impact of
+#                   multi-week floods (RR_nflood), as well as for the lag after a 
+#                   multi-week flood (RR_lag_nflood).
+#                   ii) No change to script 2
+#                   iii) Add cross bases for n_recent floods and for categorical
+#                   flood definitions
 # 
 # /////////////////////////////////////////////////////////////////////////////
 # -----------------------------------------------------------------------------
@@ -59,6 +67,38 @@ cb.flood.strat <- crossbasis(df_weekly$is_flood_week,
                        argvar=list(fun="strata", breaks = (0.99)),
                        arglag = list(fun = "poly", degree = 4),
                        group = df_weekly$county)
+
+# Now that we have a second lagged variable for multiple consecutive flood weeks,
+# we will add additional cross basis. We will include one that is including 
+# the n_recent floods over time, and then three separate additional cross basis
+# that are yes/no for the different flood categories (single week, two week, 
+# three or more weeks)
+#
+# N recent flood cross basis
+#
+cb.flood.nflood <- crossbasis(df_weekly$n_recent_floods,
+                              lag = 4,
+                              argvar=list(fun="lin"),
+                              arglag = list(fun = "poly", degree = 4),
+                              group = df_weekly$county)
+
+# Categorical cross bases
+#
+cb.flood.flood1 <- crossbasis(df_weekly$exp1 ,
+                              lag = 4,
+                              argvar=list(fun="strata", breaks = (0.99)),
+                              arglag = list(fun = "poly", degree = 4),
+                              group = df_weekly$county)
+cb.flood.flood2 <- crossbasis(df_weekly$exp2 ,
+                              lag = 4,
+                              argvar=list(fun="strata", breaks = (0.99)),
+                              arglag = list(fun = "poly", degree = 4),
+                              group = df_weekly$county)
+cb.flood.flood3 <- crossbasis(df_weekly$exp3 ,
+                              lag = 4,
+                              argvar=list(fun="strata", breaks = (0.99)),
+                              arglag = list(fun = "poly", degree = 4),
+                              group = df_weekly$county)
 
 # Assess our cross basis
 #

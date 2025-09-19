@@ -7,7 +7,7 @@
 # flood event, following the proces defined as in the Aggarwal et al. 
 # pre-print: https://arxiv.org/abs/2309.13142
 #
-# P4:
+# P5:
 #       Setting up data for simulated epi analysis.
 #             1) Create Dummy Exposure Data
 #                   i) Bring in dlnm base data and restructure for flood use
@@ -24,7 +24,11 @@
 #                   written, the lines of code setting the RR, samp_set,
 #                   rep_prob, etc. are replaced to take in the variables 
 #                   provided in script 4.
-# 
+#             5) Update scripts to account for added impact of consecutive
+#               flood weeks, add script for cross-county meta regression.
+#                   i) We will now pass additional RRs for the impact of
+#                   multi-week floods (RR_nflood), as well as for the lag after a 
+#                   multi-week flood (RR_lag_nflood).
 # /////////////////////////////////////////////////////////////////////////////
 # -----------------------------------------------------------------------------
 
@@ -74,7 +78,9 @@ set_cases <- function(df,
                       baseline_yr = 1987,
                       year_beta = 1.2,
                       RR = 2,
-                      RR_lag = 1.3) {
+                      RR_lag = 1.3,
+                      RR_nflood = 1, 
+                      RR_lag_nflood = 1) {
   
   # ******
   # df <- chicagoNMMAPS  
@@ -122,6 +128,9 @@ set_cases <- function(df,
   
   df$RR <- RR
   df$RR_lag <- RR_lag
+  df$RR_nflood <- RR_nflood
+  df$RR_lag_nflood <- RR_lag_nflood
+  
   
   return(df)
   
@@ -136,14 +145,18 @@ x1 <- set_cases(chicagoNMMAPS,
                 variance = var, 
                 year_beta = ybeta_1, 
                 RR = RR_1,
-                RR_lag = RR_1_lag)
+                RR_lag = RR_1_lag,
+                RR_nflood = RR_1_nflood,
+                RR_lag_nflood = RR_1_lag_nflood)
 
 x2 <- set_cases(chicagoNMMAPS, 
                 baseline = bl,
                 variance = var, 
                 year_beta = ybeta_2, 
                 RR = RR_2, 
-                RR_lag = RR_2_lag)
+                RR_lag = RR_2_lag,
+                RR_nflood = RR_2_nflood,
+                RR_lag_nflood = RR_2_lag_nflood)
 
 
 # The resulting df has the necessary components to now apply a flood effect.
@@ -278,7 +291,7 @@ head(df_w_exp)
 #
 df_weekly <- df_w_exp %>%
   mutate(is_flood_day_int = 1*(!is.na(is_flood_day))) %>%
-  group_by(county, week_num, RR, RR_lag) %>%
+  group_by(county, week_num, RR, RR_lag, RR_nflood, RR_lag_nflood) %>%
   summarize(
     .groups = 'keep',
     
@@ -298,6 +311,23 @@ df_weekly <- df_w_exp %>%
     avg_tmp = mean(temp, na.rm = T)
   )
 
+# P5 Addition
+# In order to account for the impact of multiple consecutive flood weeks, we
+# need to have a marker in our dataset. Using the below, we will initialize
+# an empty column for the n_recent_floods, and then iterate through so 
+# each row has a column with the sum of the n_flood_weeks within the past 
+# 4 weeks
+#
+df_weekly$n_recent_floods <- NA
+for(i in 5:nrow(df_weekly)) {
+  df_weekly$n_recent_floods[i] <- sum(df_weekly$is_flood_week[(i-4):i])
+}
+
+# For this example, we will characterize the consecutive flood weeks as impact-
+# ful only where the current week is a flood week. 
+#
+df_weekly$n_recent_floods <- ifelse(df_weekly$is_flood_week == 0, 0, df_weekly$n_recent_floods)
+df_weekly$n_recent_floods <- pmax(0, df_weekly$n_recent_floods -1 )
 
 # Remove any week that doesn't have 7 days
 #
@@ -339,6 +369,12 @@ for(county_i in 1:N_COUNTIES) {
   this_df_w_l$lag3 <- lag(this_df_w_l$is_flood_week, n = 3)
   this_df_w_l$lag4 <- lag(this_df_w_l$is_flood_week, n = 4)
   
+  # Add lags (for n_recent_floods)
+  this_df_w_l$lag_nflood_1 <- lag(this_df_w_l$n_recent_floods, n = 1)
+  this_df_w_l$lag_nflood_2 <- lag(this_df_w_l$n_recent_floods, n = 2)
+  this_df_w_l$lag_nflood_3 <- lag(this_df_w_l$n_recent_floods, n = 3)
+  this_df_w_l$lag_nflood_4 <- lag(this_df_w_l$n_recent_floods, n = 4)
+  
   for(i in 1:nrow(this_df_w_l)) {
     
     # Apply main effect
@@ -353,6 +389,25 @@ for(county_i in 1:N_COUNTIES) {
       for (j in c(1:4)) {
         if(this_df_w_l[[paste0("lag", j)]][i] == 1) {
           this_df_w_l$n_cases[i] = this_df_w_l$RR_lag[i] * this_df_w_l$n_cases[i] 
+        }
+      }
+    }
+    
+    # Apply lag effect for n_recent_floods
+    #
+    if(i > 8) {
+      
+      if (this_df_w_l$n_recent_floods[i] >= 1) {
+        this_df_w_l$n_cases[i] = this_df_w_l$n_cases[i] +
+          ((this_df_w_l$RR_nflood[i] ^ this_df_w_l$n_recent_floods[i]) - 1) * this_df_w_l$n_cases[i]
+      } else {
+        this_df_w_l$n_cases[i] = this_df_w_l$n_cases[i]
+      }
+      
+      for (j in c(1:4)) {
+        if(this_df_w_l[[paste0("lag_nflood_", j)]][i] >= 1) {
+          this_df_w_l$n_cases[i] = this_df_w_l$n_cases[i] +
+            ((this_df_w_l$RR_lag_nflood[i] ^ this_df_w_l[[paste0("lag_nflood_", j)]][i]) - 1) * this_df_w_l$n_cases[i] 
         }
       }
     }
@@ -399,8 +454,43 @@ ggplot(df_weekly[df_weekly$county == "CountyA" & df_weekly$year %in% c(1991:1993
   facet_wrap(~year)
 
 # We can see here that the effect is a result of the lag.
+# To account for the impact of multiple consecutive flood weeks, we will test
+# multiple approaches. One approach will be to use a separate cross basis for
+# multi-week flood effects. In real applications, the impact of consecutive
+# floods may not be straightforward, so we also will include code to 
+# characterize multiple categories for flood length
 #
+# Apply method that will characterize types of floods
+#
+df_weekly <- df_weekly  %>%
+  arrange(county, year, week_num) %>%
+  group_by(county, year) %>%
+  mutate(
+    flood_run = ifelse(is_flood_week==1, rleid(is_flood_week), NA)
+  ) %>% ungroup()
 
+# Assign week_within_flood
+#
+df_weekly <- df_weekly %>%
+  group_by(county, year, flood_run) %>%
+  mutate(week_within_flood = ifelse(is_flood_week==1, row_number(), NA)) %>%
+  ungroup()
 
+# Make categorical: NoFlood, Flood_Week1, Flood_Week2, Flood_Week3plus
+#
+df_weekly <- df_weekly %>%
+  mutate(
+    flood_cat = case_when(
+      is.na(week_within_flood) ~ "NoFlood",
+      week_within_flood == 1 ~ "Flood_Week1",
+      week_within_flood == 2 ~ "Flood_Week2",
+      week_within_flood >= 3 ~ "Flood_Week3plus"
+    ),
+    flood_cat = factor(flood_cat, 
+                       levels = c("NoFlood","Flood_Week1","Flood_Week2","Flood_Week3plus"))
+  )
 
-
+# Define
+df_weekly$exp1 <- (df_weekly$flood_cat == "Flood_Week1")*1
+df_weekly$exp2 <- (df_weekly$flood_cat == "Flood_Week2")*1
+df_weekly$exp3 <- (df_weekly$flood_cat == "Flood_Week3plus")*1
