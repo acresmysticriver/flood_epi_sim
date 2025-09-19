@@ -1,0 +1,27 @@
+{
+    "id": "F23E9368",
+    "path": "C:/Users/zpopp/OneDrive - Boston University/Desktop/ACRES/Sim_Flood/ACRES_flood/flood_epi_sim/p1/01_create_dummy_data_p1.R",
+    "project_path": "p1/01_create_dummy_data_p1.R",
+    "type": "r_source",
+    "hash": "2317553813",
+    "contents": "",
+    "dirty": false,
+    "created": 1757518293474.0,
+    "source_on_save": false,
+    "relative_order": 2,
+    "properties": {
+        "tempName": "Untitled1",
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "65,13",
+        "scrollLine": "52"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1757518594,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1757518594938,
+    "read_only": false,
+    "read_only_alternatives": []
+}

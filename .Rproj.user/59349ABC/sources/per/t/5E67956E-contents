@@ -1,11 +1,16 @@
 # -----------------------------------------------------------------------------
 # /////////////////////////////////////////////////////////////////////////////
-# Code for ZP for Weekly Flooding
-# doing conditional Quasi-Poisson on week, two-stage
-# with sliding strata defined as in the RParks pre-print
+# Code for Simulating Weekly Flooding Epi Analysis
 #
-# ToDo: 
-#   - HOW TO HANDLE DOUBLY EXPOSED DURING OVERLAPS? 
+# We will create conditional Quasi-Poisson selecting on county and week. 
+# We use two-stage selection with sliding strata on years before and after a 
+# flood event, following the proces defined as in the Aggarwal et al. 
+# pre-print: https://arxiv.org/abs/2309.13142
+#
+# P1:
+#       Setting up data for simulated epi analysis.
+#             1) Create Dummy Exposure Data
+#                   i) Bring in 
 # 
 # /////////////////////////////////////////////////////////////////////////////
 # -----------------------------------------------------------------------------
@@ -18,7 +23,7 @@ library(splines)
 library(future)
 library(future.apply)
 library(patchwork)
-library(zoo) # rollapply for lagging
+library(zoo)
 library(purrr)
 library(tidyr)
 library(data.table)
