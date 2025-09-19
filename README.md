@@ -18,3 +18,25 @@ Code is separated into five sections that build iteratively toward a more comple
 - Script 2 is added to select control weeks for comparison with the flood weeks defined in script 1.
 - Following the approach of [Aggarwal et al.](https://arxiv.org/abs/2309.13142), control weeks are selected for the same week-of-year in the years preceding and following a flood event.
 - The control selection process is iterative so as to only select control periods of 5 weeks (flood plus lag period) where no flooding was present.
+
+## P4: Cross Basis Definition and Running Single-County Analyses
+-  Script 3 is added to define a cross basis which can be used for the dlnm conditional quasi-Poisson implementation. A dichotomous flood effect and polynomial lag are used.
+-  Script 1 is modified to take in inputs for RR, flood likelihood, etc. based on user-defined variables from a separate script, to allow for easier iteration through user parameters.
+-  Script 4 is added for the application of all of scripts 1-3 and the input of flood, lag, and time trend effects, and baseline case counts with variance.
+-  Analytic code is provided to run for a single county, with an approach including manual definition of lag variables and the dlnm cross basis approach.
+-  Modeled effects are extracted for comparison with user-provided RR to assess model robustness to different inputs.
+
+## P5: Extension to Account for Consecutive Flood Effect and Multi-County Analyses with Meta-Regression
+- Scripts are adjusted to account for an added effect of flooding occurring on consecutive weeks, with each added flood in the past 4 weeks increasing the population health effect.
+- Multiple approaches are demonstrated for how to address this affect, including use of a cross basis for linear impacts of additional flood weeks and use of multiple cross basis across distinct flood definitions (single week, two weeks, three-plus weeks).
+- Updated analyses are run with user provided effect estimates for consecutive flood weeks. Results can be compared across approaches.
+- An additional script is included for running the analysis across counties and performing meta-regression. Results are extracted and visualized.
+
+## Note on Repository Strengths, Limitations, Applications
+The code in this repository was developed to allow researchers unfamiliar with the development and application of simulated data for testing model assumptions. The embedded risk estimates in the repository and assumptions on impacts of consecutive flood weeks are not based on the flooding literature or real-world analyses, but are provided as one example that users could iterate to test the robustness of these approaches for extracting health impacts. Note that this system  functions because we have implemented the RR directly into our dummy data. This approach also does not ensure that the model will be appropriate and reveal accurate associations when applied to real data, as 'real' data will differ in the assumptions made in linking the exposure of interest with a health outcome. 
+
+This system provides a space to test how a given modeling approach will handle changes in assumptions. In p5, we will explore how adding an additional effect for floods occurring in consecutive weeks requires changing the modeling approach. To run this analysis, we will need to update all of our scripts to pass in the new assumptions about the relationship between flooding and health. 
+
+## References
+Gasparrini A. Distributed lag linear and non-linear models in R: the package dlnm. Journal of
+  Statistical Software. 2011; 43(8):1-20. https://doi.org/10.18637/jss.v043.i08
