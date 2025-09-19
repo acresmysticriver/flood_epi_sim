@@ -7,3 +7,14 @@ Code is separated into five sections that build iteratively toward a more comple
 - Using the chicagoNMMAPS data structure embedded in the dlnm package, a daily event count time series is constructed with capacity for user-defined parameters of baseline count, variance, exposure effects, and time trend.
 - Dummy flood events are inserted to the data structure randomly, with additional user-defined parameters of flood frequency and recurrence likelihood.
 - The event and exposure data are then aggregated to a weekly event count and weekly marker of exposure.
+
+## P2: Expanding Dummy Data and Inserting Flood Effects
+- The data development process is transitioned to a function to allow for more seamless iteration through parameters and developing different inputs across dummy counties.
+- For each county, user provided RR estimated for flooding are implemented to the event count time series to approximate flood impacts.
+- The resulting event time series with exposure impacts is visualized across the 2 fake counties.
+
+## P3: Adding Lag Effects and Selecting Controls for Conditional Quasi-Poisson Approach
+- Script 1 is further modified to integrate a lag effect for flooding, where all four weeks following a flood also see an increase in event counts.
+- Script 2 is added to select control weeks for comparison with the flood weeks defined in script 1.
+- Following the approach of [Aggarwal et al.](https://arxiv.org/abs/2309.13142), control weeks are selected for the same week-of-year in the years preceding and following a flood event.
+- The control selection process is iterative so as to only select control periods of 5 weeks (flood plus lag period) where no flooding was present.
