@@ -36,23 +36,33 @@
 #                   iii) Create cross basis to estimate lag effect of flooding.
 #                   iv) Perform initial analysis to evaluate whether system
 #                       is robust to identify flooding
-#
+#             5) Update scripts to account for added impact of consecutive
+#               flood weeks, add script for cross-county meta regression.
+#                   i) We will now pass additional RRs for the impact of
+#                   multi-week floods (RR_nflood), as well as for the lag after a 
+#                   multi-week flood (RR_lag_nflood).
+#                   ii) No change to script 2
+#                   iii) Add cross bases for n_recent floods and for categorical
+#                   flood definitions
+#                   iv) Perform updated analysis to evaluate if updates 
+#                   effectively allow for assessing impact of consecutive events
+# 
 # First, clear the R environment as we will reset the inputs to the scripts
 #
 rm(list = ls()); gc()
 
 # Set sample from which N floods per year will be set
 #
-samp_set <- c(1, 2, 3, 7)
+samp_set <- c(0, 1, 2)
 
 # Set likelihood of back-to-back flood weeks
 #
-rep_prob <- 0.9
+rep_prob <- 0.4
 
 # Set baseline and variance
 # NOTE: script 1_p4 has modified function calls to take in these inputs
 #
-bl <- 100000
+bl <- 10000000
 var <- 500
 
 # Set flood effects and lag effects for each county
@@ -62,20 +72,26 @@ var <- 500
 RR_1     <- 1.50  # the RR on lag 0
 RR_1_lag <- 1.20  # the RR on lags 1:4
 ybeta_1  <- 0.90  # the year trend (in log space, so 2 means doubling every year)
+RR_1_nflood <- 1.035  # the RR associated with each additional flood in recent weeks
+RR_1_lag_nflood <- 1.02  # the RR associated with each additional flood in lag weeks
+RR_1_holiday <- 0.95 # Add holiday effect
 
 # COUNTY B
 RR_2     <- 1.60  # the RR on lag 0
 RR_2_lag <- 1.08 # the RR on lags 1:4
 ybeta_2  <- 1.00  # the year trend (in log space, so 2 means doubling every year)
+RR_2_nflood <- 1.035  # the RR associated with each additional flood in recent weeks
+RR_2_lag_nflood <- 1.02  # the RR associated with each additional flood in lag weeks
+RR_2_holiday <- 1.00 # Add holiday effect
 
 # Source scripts.
 # Note: These will be updated based on the above!
 # Note: Be sure that scripts 1 through 3 do not include the sourcing lines from
 # p1 to p3! This will overwrite the inputs above.
 #
-source('flood_epi_sim/p4/01_create_dummy_data_p4.R')
-source('flood_epi_sim/p4/02_create_sliding_windows_p4.R')
-source('flood_epi_sim/p4/03_strata_crossbasis_p4.R')
+source('flood_epi_sim/p6_add_holidayeffect/01_create_dummy_data_p6.R')
+source('flood_epi_sim/p6_add_holidayeffect/02_create_sliding_windows_p6.R')
+source('flood_epi_sim/p6_add_holidayeffect/03_strata_crossbasis_p6.R')
 
 # -----------------------------------------------------------------------------
 # /////////////////////////////////////////////////////////////////////////////
@@ -128,6 +144,19 @@ ggplot(this_df) +
               position = position_dodge(width = 1)) +
    facet_wrap(~strata)
 
+# Let's see what the effect of consecutive floods looks like
+# Subset to single events and those with event and event across lag
+#
+this_df <- this_df %>%
+  group_by(strata) %>%
+  mutate(max_n_rec = max(n_recent_floods))
+
+# Assess flood effect using ggplot2, assessing impact o
+ggplot(this_df) +
+  geom_point(aes(x = week_start, y = n_cases, col = is_flood_week, group = strata),
+             position = position_dodge(width = 1)) +
+  facet_grid(cols = vars(max_n_rec))
+
 # Note - part of what we will test here is the effect of a time trend. We 
 # can adjust for time in multiple ways. In this repo we will control by including
 # a natural spline for time
@@ -136,13 +165,18 @@ ggplot(this_df) +
 # code can derive this variable
 #
 START_YEAR = 1987
-this_df$week_iter = this_df$week_num + 52*(this_df$year - START_YEAR)
+#this_df$week_iter = this_df$week_num + 52*(this_df$year - START_YEAR)
 
 # We built our cross basis based on our full dataset. Because we run in a single
 # county, we need to derive a subset. To do this we can use the rowID in 
-# our now subset data
+# our now subset data. We want to do this for all of the cross bases we set
+# up in script 3
 #
 cb.flood.strat_local <- cb.flood.strat[this_df$row_id, ]
+cb.flood.nflood_local <- cb.flood.nflood[this_df$row_id, ]
+cb.flood.flood1_local <- cb.flood.flood1[this_df$row_id, ]
+cb.flood.flood2_local <- cb.flood.flood2[this_df$row_id, ]
+cb.flood.flood3_local <- cb.flood.flood3[this_df$row_id, ]
 
 # Within our local cb, we need to transfer the relevant attributes from the 
 # larger crossbasis
@@ -152,6 +186,18 @@ attr_transfer <- c('df', 'range', 'lag', 'argvar',
 for(att in attr_transfer) {
   # Crossbasis for flood_week indicator (0, 1)
   attr(cb.flood.strat_local, att) <- attr(cb.flood.strat, att)
+  
+  # Cross basis for consecutive flood weeks
+  attr(cb.flood.nflood_local, att) <- attr(cb.flood.nflood, att)
+  
+  # Cross basis for exp1 indicator (only first week of flooding)
+  attr(cb.flood.flood1_local, att) <- attr(cb.flood.flood1, att)
+  
+  # Cross basis for exp2 indicator (only second week of flooding)
+  attr(cb.flood.flood2_local, att) <- attr(cb.flood.flood2, att)
+  
+  # Cross basis for exp3 indicator (only third week of flooding)
+  attr(cb.flood.flood3_local, att) <- attr(cb.flood.flood3, att)
 }
 
 # -----------------------------------------------------------------------------
@@ -166,21 +212,64 @@ for(att in attr_transfer) {
 #       MOD V0 - First, we will run a model that is not using the crossbasis
 #                or dlnm, but instead provide the lag and flood explicitly,
 #                along with a year effect and a covariate with no associated
-#                effect (temperature) in this analysis.
+#                effect (temperature) in this analysis. We'll first check
+#                what the result looks like without adjusting for the added
+#                impact of consecutive flood weeks we have injected in the data
 
 ############### MOD V0 - INCLUDE HARD CODE FLOOD AND N RECENT ##################
 # Mod v0 - use no cross basis. Include N recent floods and lag term 
 # for N recent floods
 # 
-mod.v0 <- gnm(n_cases ~ is_flood_week + 
+mod.v0_unadj <- gnm(n_cases ~ is_flood_week + 
                 lag1 + lag2 + lag3 + lag4 +
                avg_tmp +
+                 holiday_flag +
                year,
              data = this_df,
              family = quasipoisson,
              eliminate = factor(strata),
              subset = keep == 1,
              na.action = 'na.exclude')
+
+# Assess whether model appears to have run effectively. Note that within the 
+# gnm application, we are looking for exponentiated outputs, so this summary
+# can be non-intuitive to interpret.
+#
+summary(mod.v0_unadj)
+
+# To get a better sense of our effect size, let's exponentiate!
+# Look at table outputs. We are running for county 1. We expect
+# that we will get back exactly what we put in for flood and lag effects
+# Check these inputs
+#
+RR_1
+RR_1_lag
+
+# Exponentiate the confidence intervals from effect
+#
+t0_unadj <- exp(confint(mod.v0_unadj))
+t0_unadj <- data.frame(t0_unadj, var = row.names(t0_unadj), est = exp(coef(mod.v0_unadj)))
+colnames(t0_unadj)[1:2] <- c('lb', 'ub')
+t0_unadj
+
+# Without adjusting, the RR and lag are all inflated! Now let's assess the 
+# effect when accounting for n_recent floods
+#
+# Mod v0 - use no cross basis. Include N recent floods and lag term 
+# for N recent floods
+# 
+mod.v0 <- gnm(n_cases ~ is_flood_week + 
+                      lag1 + lag2 + lag3 + lag4 +
+                      n_recent_floods +
+                      lag_nflood_1 + lag_nflood_2 + lag_nflood_3 + lag_nflood_4 +
+                      holiday_flag +
+                      avg_tmp +
+                      year,
+                    data = this_df,
+                    family = quasipoisson,
+                    eliminate = factor(strata),
+                    subset = keep == 1,
+                    na.action = 'na.exclude')
 
 # Assess whether model appears to have run effectively. Note that within the 
 # gnm application, we are looking for exponentiated outputs, so this summary
@@ -195,6 +284,8 @@ summary(mod.v0)
 #
 RR_1
 RR_1_lag
+RR_1_nflood
+RR_1_lag_nflood
 
 # Exponentiate the confidence intervals from effect
 #
@@ -208,10 +299,11 @@ t0
 # the risk of flooding in this context.
 # Now, let's assess how use of the dlnm compares.
 
-############### MOD V1 - INCLUDE CROSS BASIS OF FLOODING ##########
+############### MOD V1 - INCLUDE CROSS BASIS OF FLOODING AND N_Recent ##########
 # Mod v1 - use flood crossbasis
 #
 mod.v1 <- gnm(n_cases ~ cb.flood.strat_local + 
+                cb.flood.nflood_local +
                 avg_tmp +
                 year,
               data = this_df,
@@ -226,14 +318,22 @@ summary(mod.v1)
 #
 exp(coef(mod.v1))
 
-# To visualize the effect, we can use a crossprediction 
+# To visualize the effect, we can use a crossprediction. Note, this has to be 
+# done separately for each cross basis
+#
 #
 cp.strata <- crosspred(cb.flood.strat_local, mod.v1)
+cp.nvis.strata <- crosspred(cb.flood.nflood_local, mod.v1)
 
 t1_isflood <- data.frame(var = 'crosspred',
                  lb = cp.strata$allRRlow,
                  ub = cp.strata$allRRhigh,
                  est = cp.strata$allRRfit)
+
+t1_nvis <- data.frame(var = 'crosspred',
+                      lb = cp.nvis.strata$allRRlow,
+                      ub = cp.nvis.strata$allRRhigh,
+                      est = cp.nvis.strata$allRRfit)
 
 # Look at plot outputs. 
 # The below will generate a left- and right-hand plot. 
@@ -246,9 +346,12 @@ t1_isflood <- data.frame(var = 'crosspred',
 # the lag period. For inputs of RR 2 and RR_lag 1.15, this results in a 
 # cumulative effect around 3.5 (2 * 1.15 * 1.15 * 1.15 * 1.15)
 #
-par(mfrow = c(1, 2))
+par(mfrow = c(2, 2))
 plot(cp.strata, 'slices', var = c(1),  main = 'CB for Is Flood Week == 1')
 plot(cp.strata, 'overall')
+
+plot(cp.nvis.strata, 'slices', var = c(1),  main = 'CB For N Recent Floods')
+plot(cp.nvis.strata, 'overall')
 
 # It looks like the dlnm was able to effectively address these inputs!
 # To ensure our model is robust, we can modify the inputs at top and ensure 
@@ -260,19 +363,58 @@ plot(cp.strata, 'overall')
 #       Increasing the number of flood events?
 #       Removing the lag effect?
 #
-# The pipeline set up here should be robust to change. Note that this system 
-# functions because we have implemented the RR directly into our dummy data,
-# it does not reflect actual associations between the exposure of interest
-# and health. This approach also does not ensure that the model will be 
-# appropriate and reveal accurate associations when applied to real data, as
-# 'real' data likely will differ in the assumptions made in linking
-# the exposure of interest with a health outcome. 
+# While the cross basis appears to be effective, we might want to also test
+# in our 'real' data in the future the effect of different flood effects. Let's
+# test the impact of differing categorical floods
 #
-# This system is excellent, however, to provide space to test how a given
-# modeling approach will handle changes in assumptions. In p5, we will explore
-# how adding an additional effect for floods occurring in consecutive weeks
-# requires changing the modeling approach. To run this analysis, we will need to
-# update all of our scripts to pass in the new assumptions about the relationship
-# between flooding and health. Before moving on to p5, update the scripts 
-# yourself to document a RR of 1.1 associated with each additional consecutive
-# flooding week.
+############### MOD V2 - INCLUDE CATEGORICAL CROSS BASIS #######################
+# Mod v2 - use categorical flood crossbases
+# **************
+mod.v1 <- gnm(n_cases ~ cb.flood.flood1_local + cb.flood.flood2_local + 
+                cb.flood.flood3_local +
+                avg_tmp +
+                year,
+              # ********
+              data = this_df,
+              family = quasipoisson,
+              eliminate = factor(strata),
+              subset = keep == 1,
+              na.action = 'na.exclude')
+
+summary(mod.v1)
+
+# Ok this seems to work now as well
+cp_1.strata <- crosspred(cb.flood.flood1_local, mod.v1)
+cp_2.strata <- crosspred(cb.flood.flood2_local, mod.v1)
+cp_3.strata <- crosspred(cb.flood.flood3_local, mod.v1)
+
+t_flood1 <- data.frame(var = 'crosspred',
+                       lb = cp_1.strata$allRRlow,
+                       ub = cp_1.strata$allRRhigh,
+                       est = cp_1.strata$allRRfit)
+
+t_flood2 <- data.frame(var = 'crosspred',
+                       lb = cp_2.strata$allRRlow,
+                       ub = cp_2.strata$allRRhigh,
+                       est = cp_2.strata$allRRfit)
+
+t_flood3 <- data.frame(var = 'crosspred',
+                       lb = cp_3.strata$allRRlow,
+                       ub = cp_3.strata$allRRhigh,
+                       est = cp_3.strata$allRRfit)
+
+# with lags
+par(mfrow = c(3, 2))
+plot(cp_1.strata, 'slices', var = c(1),  main = 'CB with Lag, One Week Flood')
+plot(cp_1.strata, 'overall')
+
+plot(cp_2.strata, 'slices', var = c(1),  main = 'CB with Lag, Second Week Flood')
+plot(cp_2.strata, 'overall')
+
+plot(cp_3.strata, 'slices', var = c(1),  main = 'CB with Lag, Third Week Flood')
+plot(cp_3.strata, 'overall')
+
+# We cannot extract the impacts in the same way as with the n_recent_flood 
+# cross basis, but this approach allows for quantifying the different impacts
+# of floods of differing durations
+

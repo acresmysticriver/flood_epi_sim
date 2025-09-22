@@ -87,9 +87,9 @@ RR_2_lag_nflood <- 1.02  # the RR associated with each additional flood in lag w
 # Note: Be sure that scripts 1 through 3 do not include the sourcing lines from
 # p1 to p3! This will overwrite the inputs above.
 #
-source('flood_epi_sim/p5/01_create_dummy_data_p5.R')
-source('flood_epi_sim/p5/02_create_sliding_windows_p5.R')
-source('flood_epi_sim/p5/03_strata_crossbasis_p5.R')
+source('flood_epi_sim/p5_final_multiweek_run/01_create_dummy_data_p5.R')
+source('flood_epi_sim/p5_final_multiweek_run/02_create_sliding_windows_p5.R')
+source('flood_epi_sim/p5_final_multiweek_run/03_strata_crossbasis_p5.R')
 
 # -----------------------------------------------------------------------------
 # /////////////////////////////////////////////////////////////////////////////
@@ -245,7 +245,7 @@ RR_1_lag
 # Exponentiate the confidence intervals from effect
 #
 t0_unadj <- exp(confint(mod.v0_unadj))
-t0_unadj <- data.frame(t0, var = row.names(t0_unadj), est = exp(coef(mod.v0_unadj)))
+t0_unadj <- data.frame(t0_unadj, var = row.names(t0_unadj), est = exp(coef(mod.v0_unadj)))
 colnames(t0_unadj)[1:2] <- c('lb', 'ub')
 t0_unadj
 
@@ -342,11 +342,11 @@ t1_nvis <- data.frame(var = 'crosspred',
 # the lag period. For inputs of RR 2 and RR_lag 1.15, this results in a 
 # cumulative effect around 3.5 (2 * 1.15 * 1.15 * 1.15 * 1.15)
 #
-par(mfrow = c(1, 2))
+par(mfrow = c(2, 2))
 plot(cp.strata, 'slices', var = c(1),  main = 'CB for Is Flood Week == 1')
 plot(cp.strata, 'overall')
 
-plot(cp.nvis.strata, 'slices', var = c(1),  main = 'CB For N Recent Floods == 2')
+plot(cp.nvis.strata, 'slices', var = c(1),  main = 'CB For N Recent Floods')
 plot(cp.nvis.strata, 'overall')
 
 # It looks like the dlnm was able to effectively address these inputs!

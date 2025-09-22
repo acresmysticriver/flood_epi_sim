@@ -34,7 +34,7 @@
 # script (df_weekly) to be run. You can run script 1 or use the below to bring
 # in the data:
 #
-source('flood_epi_sim/p3/01_create_dummy_data_p3.R')
+source('flood_epi_sim/p3_select_controls/01_create_dummy_data_p3.R')
 
 # For our case sample, we have a flood and four lag weeks.
 # For our control sample, because of the potential for longer-lasting flood 

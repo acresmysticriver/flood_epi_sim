@@ -81,9 +81,9 @@ ybeta_2  <- 1.00  # the year trend (in log space, so 2 means doubling every year
 RR_2_nflood <- 1.035  # the RR associated with each additional flood in recent weeks
 RR_2_lag_nflood <- 1.02  # the RR associated with each additional flood in lag weeks
 
-source('flood_epi_sim/p5/01_create_dummy_data_p5.R')
-source('flood_epi_sim/p5/02_create_sliding_windows_p5.R')
-source('flood_epi_sim/p5/03_strata_crossbasis_p5.R')
+source('flood_epi_sim/p5_final_multiweek_run/01_create_dummy_data_p5.R')
+source('flood_epi_sim/p5_final_multiweek_run/02_create_sliding_windows_p5.R')
+source('flood_epi_sim/p5_final_multiweek_run/03_strata_crossbasis_p5.R')
 
 # uncomment this if you want to save it as an image
 # scale = 1.5

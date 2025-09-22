@@ -9,17 +9,20 @@ Code is separated into five sections that build iteratively toward a more comple
 - Using the chicagoNMMAPS data structure embedded in the dlnm package, a daily event count time series is constructed with capacity for user-defined parameters of baseline count, variance, exposure effects, and time trend.
 - Dummy flood events are inserted to the data structure randomly, with additional user-defined parameters of flood frequency and recurrence likelihood.
 - The event and exposure data are then aggregated to a weekly event count and weekly marker of exposure.
+![](./img/df_weekly_p1.png)
 
 ## P2: Expanding Dummy Data and Inserting Flood Effects
 - The data development process is transitioned to a function to allow for more seamless iteration through parameters and developing different inputs across dummy counties.
 - For each county, user provided RR estimated for flooding are implemented to the event count time series to approximate flood impacts.
 - The resulting event time series with exposure impacts is visualized across the 2 fake counties.
+![](./img/case_sum_series_flood_p2.png)
 
 ## P3: Adding Lag Effects and Selecting Controls for Conditional Quasi-Poisson Approach
 - Script 1 is further modified to integrate a lag effect for flooding, where all four weeks following a flood also see an increase in event counts.
 - Script 2 is added to select control weeks for comparison with the flood weeks defined in script 1.
 - Following the approach of [Aggarwal et al.](https://arxiv.org/abs/2309.13142), control weeks are selected for the same week-of-year in the years preceding and following a flood event.
 - The control selection process is iterative so as to only select control periods of 5 weeks (flood plus lag period) where no flooding was present.
+![](./img/case_control_series_p3.png)
 
 ## P4: Cross Basis Definition and Running Single-County Analyses
 -  Script 3 is added to define a cross basis which can be used for the dlnm conditional quasi-Poisson implementation. A dichotomous flood effect and polynomial lag are used.
@@ -27,12 +30,14 @@ Code is separated into five sections that build iteratively toward a more comple
 -  Script 4 is added for the application of all of scripts 1-3 and the input of flood, lag, and time trend effects, and baseline case counts with variance.
 -  Analytic code is provided to run for a single county, with an approach including manual definition of lag variables and the dlnm cross basis approach.
 -  Modeled effects are extracted for comparison with user-provided RR to assess model robustness to different inputs.
+![](./img/results_p4.png)
 
 ## P5: Extension to Account for Consecutive Flood Effect and Multi-County Analyses with Meta-Regression
 - Scripts are adjusted to account for an added effect of flooding occurring on consecutive weeks, with each added flood in the past 4 weeks increasing the population health effect.
 - Multiple approaches are demonstrated for how to address this affect, including use of a cross basis for linear impacts of additional flood weeks and use of multiple cross basis across distinct flood definitions (single week, two weeks, three-plus weeks).
 - Updated analyses are run with user provided effect estimates for consecutive flood weeks. Results can be compared across approaches.
 - An additional script is included for running the analysis across counties and performing meta-regression. Results are extracted and visualized.
+![](./img/results_nflood_p5.png)
 
 ## Note on Repository Strengths, Limitations, Applications
 The code in this repository was developed to allow researchers unfamiliar with the development and application of simulated data for testing model assumptions. The embedded risk estimates in the repository and assumptions on impacts of consecutive flood weeks are not based on the flooding literature or real-world analyses, but are provided as one example that users could iterate to test the robustness of these approaches for extracting health impacts. Note that this system  functions because we have implemented the RR directly into our dummy data. This approach also does not ensure that the model will be appropriate and reveal accurate associations when applied to real data, as 'real' data will differ in the assumptions made in linking the exposure of interest with a health outcome. 
