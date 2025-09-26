@@ -39,6 +39,9 @@ Code is separated into five sections that build iteratively toward a more comple
 - An additional script is included for running the analysis across counties and performing meta-regression. Results are extracted and visualized.
 ![](./img/results_nflood_p5.png)
 
+## P6: Extension to Account for Potential Holiday Effect
+- Added example of further dummy data modification to insert flag for US federal holidays with impact on visit counts. 
+
 ## Note on Repository Strengths, Limitations, Applications
 The code in this repository was developed to allow researchers unfamiliar with the development and application of simulated data for testing model assumptions. The embedded risk estimates in the repository and assumptions on impacts of consecutive flood weeks are not based on the flooding literature or real-world analyses, but are provided as one example that users could iterate to test the robustness of these approaches for extracting health impacts. Note that this system  functions because we have implemented the RR directly into our dummy data. This approach also does not ensure that the model will be appropriate and reveal accurate associations when applied to real data, as 'real' data will differ in the assumptions made in linking the exposure of interest with a health outcome. 
 
