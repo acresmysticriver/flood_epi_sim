@@ -56,30 +56,30 @@ library(mvmeta)
 
 # Set sample from which N floods per year will be set
 #
-samp_set <- c(0, 1, 2)
+samp_set <- c(1, 2, 4)
 
 # Set likelihood of back-to-back flood weeks
 #
-rep_prob <- 0.4
+rep_prob <- 0.6
 
 # Set baseline and variance
 #
-bl <- 100000
+bl <- 6000
 var <- 500
 
 # COUNTY A
 RR_1     <- 1.50  # the RR on lag 0
 RR_1_lag <- 1.20  # the RR on lags 1:4
 ybeta_1  <- 0.90  # the year trend (in log space, so 2 means doubling every year)
-RR_1_nflood <- 1.035  # the RR associated with each additional flood in recent weeks
-RR_1_lag_nflood <- 1.02  # the RR associated with each additional flood in lag weeks
+RR_1_nflood <- 1.00  # the RR associated with each additional flood in recent weeks
+RR_1_lag_nflood <- 1.00  # the RR associated with each additional flood in lag weeks
 
 # COUNTY B
 RR_2     <- 1.60  # the RR on lag 0
 RR_2_lag <- 1.08 # the RR on lags 1:4
 ybeta_2  <- 1.00  # the year trend (in log space, so 2 means doubling every year)
-RR_2_nflood <- 1.035  # the RR associated with each additional flood in recent weeks
-RR_2_lag_nflood <- 1.02  # the RR associated with each additional flood in lag weeks
+RR_2_nflood <- 1.00  # the RR associated with each additional flood in recent weeks
+RR_2_lag_nflood <- 1.00  # the RR associated with each additional flood in lag weeks
 
 source('flood_epi_sim/p5_final_multiweek_run/01_create_dummy_data_p5.R')
 source('flood_epi_sim/p5_final_multiweek_run/02_create_sliding_windows_p5.R')
@@ -131,6 +131,27 @@ for (county_i in c(1:2)) {
   run <- paste0(county_i)
   cat(run, "\n")
   
+  # We built our cross basis based on our full dataset. Because we run in a single
+  # county, we need to derive a subset. To do this we can use the rowID in 
+  # our now subset data. We want to do this for all of the cross bases we set
+  # up in script 3
+  #
+  cb.flood.strat_local <- cb.flood.strat[this_df$row_id, ]
+  cb.flood.nflood_local <- cb.flood.nflood[this_df$row_id, ]
+  
+  # Within our local cb, we need to transfer the relevant attributes from the 
+  # larger crossbasis
+  #
+  attr_transfer <- c('df', 'range', 'lag', 'argvar', 
+                     'arglag', 'group', 'class')
+  for(att in attr_transfer) {
+    # Crossbasis for flood_week indicator (0, 1)
+    attr(cb.flood.strat_local, att) <- attr(cb.flood.strat, att)
+    
+    # Cross basis for consecutive flood weeks
+    attr(cb.flood.nflood_local, att) <- attr(cb.flood.nflood, att)
+  }
+  
   # Add week iteration
   #
   START_YEAR = 1987
@@ -138,10 +159,8 @@ for (county_i in c(1:2)) {
   
   # Build formula to run
   #
-  formula_run <- as.formula("n_cases ~ is_flood_week + 
-                              lag1 + lag2 + lag3 + lag4 +
-                              n_recent_floods +
-                               lag_nflood_1  + lag_nflood_2 + lag_nflood_3  + lag_nflood_4  + 
+  formula_run <- as.formula("n_cases ~ cb.flood.strat_local + 
+                cb.flood.nflood_local  + 
                               avg_tmp +
                               year")
   
@@ -154,24 +173,84 @@ for (county_i in c(1:2)) {
   
   # Add to list
   #
-  coef_list[[run]] <- coef(modelrun)
-  vcov_list[[run]]  <- vcov(modelrun)
+  cb_names <- c(paste0("cb.flood.strat_local", colnames(cb.flood.strat_local)),
+                paste0("cb.flood.nflood_local", colnames(cb.flood.nflood_local)))
+  coef_list[[run]] <- coef(modelrun)[cb_names]
+  vcov_list[[run]]  <- vcov(modelrun)[cb_names, cb_names]
   
-  # Get outputs for model
+  ###### FLOOD EFFECT #########
+  
+  # Run crossprediction
   #
-  t1 <- exp(confint(modelrun))
-  t1 <- data.frame(t1, var = row.names(t1), est = exp(coef(modelrun)))
-  colnames(t1)[1:2] <- c('lb', 'ub')
+  cp.strata <- crosspred(cb.flood.strat_local, modelrun, at = 1)
+  
+  # Get cumulative effect
+  #
+  cumul_isflood <- data.frame(RR = tail(cp.strata$allRRfit, 1),
+                              RR_high = tail(cp.strata$allRRhigh, 1),
+                              RR_low = tail(cp.strata$allRRlow, 1),
+                              lag = "cumulative")
+  
+  # Save lag outputs and CI
+  #
+  lag_val_isflood <- cp.strata$matRRfit
+  lag_val_hi_isflood <- cp.strata$matRRhigh
+  lag_val_lo_isflood <- cp.strata$matRRlow
+  
+  # Create table from inputs
+  #
+  outtable <- rbind(lag_val_isflood, lag_val_hi_isflood, lag_val_lo_isflood)
+  outtable <- as.data.table(outtable)
+  outtable <- transpose(outtable)
+  outtable$lag <- c(0:4)
+  outtable <- as.data.frame(outtable)
+  names(outtable) <- c("RR", "RR_high", "RR_low", "lag")
+  outtable <- rbind(outtable, cumul_isflood)
+  outtable$effect <- "flood"
 
-  # Add markers
-  t1$county <- county_i
+  
+  ############## N WEEKS EFFECT #########
+  
+  cp.nvis.strata <- crosspred(cb.flood.nflood_local, modelrun, at = 1)
+  
+  # Get cumulative effect
+  #
+  cumul_nflood <- data.frame(RR = tail(cp.nvis.strata$allRRfit, 1),
+                              RR_high = tail(cp.nvis.strata$allRRhigh, 1),
+                              RR_low = tail(cp.nvis.strata$allRRlow, 1),
+                              lag = "cumulative")
+  
+  # Save lag outputs and CI
+  #
+  lag_val_nflood <- cp.nvis.strata$matRRfit
+  lag_val_hi_nflood <- cp.nvis.strata$matRRhigh
+  lag_val_lo_nflood <- cp.nvis.strata$matRRlow
+  
+  # Create table from inputs
+  #
+  outtable_nflood <- rbind(lag_val_nflood, lag_val_hi_nflood, lag_val_lo_nflood)
+  outtable_nflood <- as.data.table(outtable_nflood)
+  outtable_nflood <- transpose(outtable_nflood)
+  outtable_nflood$lag <- c(0:4)
+  outtable_nflood <- as.data.frame(outtable_nflood)
+  names(outtable_nflood) <- c("RR", "RR_high", "RR_low", "lag")
+  outtable_nflood <- rbind(outtable_nflood, cumul_nflood)
+  outtable_nflood$effect <- "n_floodweeks"
+  
+  # Bind all together
+  #
+  outtable_full <- rbind(outtable, outtable_nflood)
+  
+  # Add flags for output
+  #
+  outtable_full$county <- county_i
   
   # Stack em up
   #
   if (county_i == 1) {
-    stack_t <- t1
+    stack_t <- outtable_full
   } else {
-    stack_t <- rbind(stack_t, t1)
+    stack_t <- rbind(stack_t, outtable_full)
   }
 }
 
@@ -188,17 +267,33 @@ vcovs <- vcov_list
 
 # Run meta model
 #
-meta_model <- mvmeta(coefs ~ 1, S = vcovs, method = "reml")
+meta_model <- mixmeta(coefs ~ 1, S = vcovs, method = "reml")
+
+# 4) Overall pooled exposure-response: use the parent crossbasis with the meta coef/vcov
+pooled_coef <- coef(meta_model)     # pooled fixed-effects vector (must match cb columns)
+pooled_vcov <- vcov(meta_model)     # pooled vcov (same dimension)
+
+# crosspred requires the same crossbasis object (cb_parent) and the coef/vcov
+pred_pooled <- crosspred(cb.flood.strat, 
+                         coef = pooled_coef[grepl("strat", pooled_coef)], 
+                         vcov = pooled_vcov[grepl("strat", pooled_vcov)],
+                         model.link = "log")
 
 # View results
 #
 meta_model$model
 summary(meta_model)
 
-# Print output
-#
 print(exp(coef(meta_model)), digits=4)
 print(exp(confint(meta_model)), digits=4)
+
+# Run crosspred with full basis
+#
+pred_flood <- crosspred(cb.flood.strat,
+                        coef = coef(meta_model),
+                        vcov = vcov(meta_model),
+                        model.link = "log",  # or "identity", depending on your GLM
+                        by = 1)
 
 # Save output with confidence intervals to view estimates and plot result
 #
